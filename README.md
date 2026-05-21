@@ -1,4 +1,6 @@
-# PayPaul
+# 88Pay
+
+## PayPaul
 
 - Self-hosted, noncustodial crypto-currency (currently Monero(XMR), Ethereum(ETH), Solana(SOL), PAINT, HEX, MATIC, BUSD, SHIBA_INU, USDC, TETHER, WBTC, and PNK ) superchat system written in Go.
 - Provides notifications and a progress bar usable in OBS as well as admin pages for settings like minimum donos.
