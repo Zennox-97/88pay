@@ -1,20 +1,33 @@
 # 88Pay
 
-## PayPaul
-
 - Self-hosted, noncustodial crypto-currency (currently Monero(XMR), Ethereum(ETH), Solana(SOL), PAINT, HEX, MATIC, BUSD, SHIBA_INU, USDC, TETHER, WBTC, and PNK ) superchat system written in Go.
+- [SOON] Reads TTS messages from Solana transaction memo fields for viewer interaction.
+- [SOON] Word filtering for TTS
 - Provides notifications and a progress bar usable in OBS as well as admin pages for settings like minimum donos.
 - Settings pages /user /userobs (default login is user:admin password:hunter123)
 
-To see a working instance of PayPaul, see [ferret.cash](https://ferret.cash).
+# Current Goals
+[ ] - Add memo field parsing for Solana transaction for custom TTS from viewers
+[ ] - Remove all ferret.cash references
+[ ] - General UI improvements
+[ ] - Add "88Pay" logos
+[ ] - Add TTS word filtering to stop undesireable donations
 
-# Installation
+# [SOON] Windows Installation
+1. Download/Clone 88pay into a folder of your choice
+2. Install GoLang and TDM-GCC for windows
+3. Run "88pay-start.bat"
+4. Close the terminal window when you want to stop recieving donations
+
+# Linux/Mac Installation
 
 1. ```apt install golang```
 2. ```git clone https://github.com/pautown/paulpay.git```
 3. ```cd shadowchat```
 4. ```go install github.com/skip2/go-qrcode@latest```
 5. ```go run main.go```
+
+
 
 A webserver at 127.0.0.1:8900 is running.
 
