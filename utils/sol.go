@@ -158,6 +158,13 @@ func CheckTransactionSolana(amt string, addr string, max_depth int) (bool, inter
 func SetSolWallets(sW map[int]SolWallet) {
   solWallets = sW
 }
+
+// SetSolanaDonationCallback registers the callback from main.go
+// so new incoming SOL transactions with memos trigger the alert + TTS
+func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo string)) {
+	processNewSolDonation = fn
+}
+
 func getTransactionsForAddresses() {
   for _, wallet := range solWallets {
     sameBalance := false

@@ -4606,11 +4606,6 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	}
 }
 
-// SetSolanaDonationCallback allows utils/sol.go to call back into main
-func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo string)) {
-	utils.processNewSolDonation = fn
-}
-
 // ProcessNewSolanaDonation handles spontaneous donations + memo for TTS/alert
 func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
 	amountSOL := float64(amountLamports) / 1_000_000_000
