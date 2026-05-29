@@ -398,10 +398,12 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
 }
 
 // fetchFullTransaction gets the complete transaction details including memo
+// fetchFullTransaction retrieves the complete Solana transaction from RPC
+// (with proper Content-Type header + retry logic)
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
 
-	for attempt := 1; attempt <= 3; attempt++ { // retry up to 3 times
+	for attempt := 1; attempt <= 3; attempt++ {
 		requestBody := fmt.Sprintf(`{
 			"jsonrpc": "2.0",
 			"id": 1,
@@ -418,15 +420,18 @@ func fetchFullTransaction(signature string) interface{} {
 
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
 		if err != nil {
-			fmt.Printf("[!][RPC] Request creation error (attempt %d): %v\n", attempt, err)
+			fmt.Printf("❌ [RPC] Request creation error (attempt %d): %v\n", attempt, err)
 			time.Sleep(800 * time.Millisecond)
 			continue
 		}
 
+		// === THIS WAS THE MISSING PIECE ===
+		req.Header.Set("Content-Type", "application/json")
+
 		client := &http.Client{Timeout: 12 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("[!][RPC] Network error (attempt %d): %v\n", attempt, err)
+			fmt.Printf("❌ [RPC] Network error (attempt %d): %v\n", attempt, err)
 			time.Sleep(800 * time.Millisecond)
 			continue
 		}
@@ -434,27 +439,24 @@ func fetchFullTransaction(signature string) interface{} {
 
 		var txResponse map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
-			fmt.Printf("[!][RPC] JSON decode error (attempt %d): %v\n", attempt, err)
+			fmt.Printf("❌ [RPC] JSON decode error (attempt %d): %v\n", attempt, err)
 			time.Sleep(800 * time.Millisecond)
 			continue
 		}
 
-		// === DEBUG: Show us exactly what Solana returned ===
-		if result, exists := txResponse["result"]; exists {
-			if result == nil {
-				fmt.Printf("[!][RPC] Transaction %s not yet available (result=null) — attempt %d\n", signature[:12]+"...", attempt)
-			} else {
-				fmt.Printf("[SUCCESS][RPC] Full tx data received for %s\n", signature[:12]+"...")
-				return result
-			}
+		if result, exists := txResponse["result"]; exists && result != nil {
+			fmt.Printf("✅ [RPC] Full tx data received for %s\n", signature[:12]+"...")
+			return result
+		} else if result == nil {
+			fmt.Printf("⚠️ [RPC] Transaction %s not yet available (result=null) — attempt %d\n", signature[:12]+"...", attempt)
 		} else {
-			fmt.Printf("[FAIL][RPC] No 'result' key in response (attempt %d). Full response: %+v\n", attempt, txResponse)
+			fmt.Printf("❌ [RPC] Unexpected response (attempt %d): %+v\n", attempt, txResponse)
 		}
 
-		time.Sleep(800 * time.Millisecond) // back-off
+		time.Sleep(800 * time.Millisecond)
 	}
 
-	fmt.Printf("[FAIL][RPC] Failed to fetch tx %s after 3 attempts\n", signature[:12]+"...")
+	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 3 attempts\n", signature[:12]+"...")
 	return nil
 }
 // End of fetchFUllTransaction
