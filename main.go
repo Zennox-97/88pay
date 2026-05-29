@@ -1911,18 +1911,34 @@ func checkUnfulfilledDonos() []utils.Dono {
 				continue
 			}
 			updateDonoInMap(dono)
-		} else if dono.CurrencyType == "SOL" {
-			log.Println("SOLANA DONO AMOUNT NEEDED:", dono.AmountToSend)
-			if utils.CheckTransactionSolana(dono.AmountToSend, dono.Address, 100) {
-				dono.AmountSent, _ = utils.PruneStringByDecimalPoints(dono.AmountToSend, 5)
-				addDonoToDonoBar(dono.AmountSent, dono.CurrencyType, dono.UserID) // change Amount To Send to USD value of sent
-				dono.Fulfilled = true
-				dono.EncryptedIP = ""
-				fulfilledDonos = append(fulfilledDonos, dono)
-				updateDonoInMap(dono)
-				continue
-			}
-		}
+		} else if dono.CurrencyType == "SOL" {	
+		    log.Println("🔍 Checking SOL transaction for:", dono.AmountToSend)
+    
+            found, txData := utils.CheckTransactionSolana(dono.AmountToSend, dono.Address, 100)
+    
+            if found {
+                memo := utils.ExtractSolanaMemo(txData)
+        
+                dono.AmountSent, _ = utils.PruneStringByDecimalPoints(dono.AmountToSend, 5)
+        
+                if memo != "" && memo != dono.Message {
+                    log.Printf("SOL Memo found for TTS: %s", memo)
+                    dono.Message = memo  // This is what feeds TTS + alert box
+                } else if memo == "" {
+                    log.Println("No memo found in transaction")
+                }
+        
+                addDonoToDonoBar(dono.AmountSent, dono.CurrencyType, dono.UserID)
+                dono.Fulfilled = true
+                dono.EncryptedIP = ""
+                fulfilledDonos = append(fulfilledDonos, dono)
+                updateDonoInMap(dono)
+                continue
+            }
+
+
+        
+        }
 	}
 	updateDonosInDB()
 	removeFulfilledDonos(fulfilledDonos)
@@ -4567,6 +4583,8 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	}
 }
 
+
+/*** SOLANA PROCESSOR - ADD MEMO PARSING SOMEWHER HERE ***/
 func handleSolanaPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, params url.Values, name_ string, message_ string, amount_ float64, showAmount_ bool, media_ string, encrypted_ip string, USDAmount float64, userID int) {
 	// Get Solana address and desired balance from request
 	address := getSolAddressByID(userID)

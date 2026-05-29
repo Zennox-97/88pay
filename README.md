@@ -1,5 +1,10 @@
 # 88Pay
 
+Free, self-hosted crypto donation service that interfaces with OBS.
+You cannot be debanked, you cannot be censored. This is to be used by anybody who wants to stream and accept donations
+
+
+
 - Self-hosted, noncustodial crypto-currency (currently Monero(XMR), Ethereum(ETH), Solana(SOL), PAINT, HEX, MATIC, BUSD, SHIBA_INU, USDC, TETHER, WBTC, and PNK ) superchat system written in Go.
 - [SOON] Reads TTS messages from Solana transaction memo fields for viewer interaction.
 - [SOON] Word filtering for TTS
@@ -48,7 +53,8 @@ This is currently designed to be run on a cloud server with nginx proxypass for 
 3. Download the `monero-wallet-rpc` binary that is bundled with the getmonero.org wallets.
 4. Place the 'monero-wallet-rpc' inside monero folder
 
-# Usage
+# How to access everything
+IMMEDIATELY CHANGE THE ADMIN PASSWORD
 - Visit 127.0.0.1:8900/user to view your user settings
 - Visit 127.0.0.1:8900/userobs to view your user OBS settings
 - Visit 127.0.0.1:8900/alert to see notifications (only have one of these open at a time, preferrably in the OBS screen)
@@ -59,10 +65,14 @@ This is currently designed to be run on a cloud server with nginx proxypass for 
 GPLv3
 
 ### Origin
-This comes from [https://git.sr.ht/~anon_/shadowchat](https://git.sr.ht/~anon_/shadowchat) and the base logic (mostly rewritten now) is not Paul's original
-work, although without the base logic I would have never started doing this, so thank you to the great mind behind this.
+The original fork has this text
+
+"This comes from [https://git.sr.ht/~anon_/shadowchat](https://git.sr.ht/~anon_/shadowchat) and the base logic (mostly rewritten now) is not Paul's original
+work, although without the base logic I would have never started doing this, so thank you to the great mind behind this."
+
+This is a fork from [fork source here]. Would not have been possible without Paul's work, which is now being modified by me.
 
 ### Donate
 
-To support further development of this project, send XMR to me (Paul) at:
+To support the original creator of this project, send XMR to me Paul Town at:
 `88K988HXHBTZZEFACejzJRDe7zMiKviesFKWtq4Q3Bo6VZfPZDWFzbod4Kn7SudVSBKhu5GqMUqBUXFNj5wBLyWuNWe4nqN`

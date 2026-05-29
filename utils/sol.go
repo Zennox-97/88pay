@@ -1,20 +1,21 @@
 package utils
 
 import (
-  "context"
-  "encoding/json"
-  "fmt"
-  //"github.com/davecgh/go-spew/spew"
-  //bin "github.com/gagliardetto/binary"
-  "bytes"
-  "github.com/gagliardetto/solana-go"
-  "github.com/gagliardetto/solana-go/rpc"
-
-  "github.com/portto/solana-go-sdk/client"
-  "github.com/shopspring/decimal"
-  //"log"
-  "net/http"
-  "time"
+    "encoding/base64"
+    "net/http"
+    "strings"
+    "context"
+    "encoding/json"
+    "fmt"
+    //"github.com/davecgh/go-spew/spew"
+    //bin "github.com/gagliardetto/binary"
+    "bytes"
+    "github.com/gagliardetto/solana-go"
+    "github.com/gagliardetto/solana-go/rpc"
+    "github.com/portto/solana-go-sdk/client"
+    "github.com/shopspring/decimal"
+    //"log"
+    "time"
 )
 
 type TransactionResponse struct {
@@ -89,7 +90,7 @@ func StartMonitoringSolana() {
     getTransactionsForAddresses()
   }
 }
-
+/* Old CheckTransactionSolana function
 func CheckTransactionSolana(amt string, addr string, max_depth int) bool {
   decAmountReceived, _ := decimal.NewFromString(amt)
   decMultiplier := decimal.NewFromFloat(1000000000)
@@ -111,6 +112,45 @@ func CheckTransactionSolana(amt string, addr string, max_depth int) bool {
   }
   return false
 }
+*/
+
+// New CheckTransactionSolana
+
+// CheckTransactionSolana checks for a matching Solana transaction and returns the full tx data if found
+// Returns (found bool, txData interface{})
+func CheckTransactionSolana(amt string, addr string, max_depth int) (bool, interface{}) {
+	decAmountReceived, _ := decimal.NewFromString(amt)
+	decMultiplier := decimal.NewFromFloat(1000000000)
+	result := decAmountReceived.Mul(decMultiplier)
+	amountSent := result.IntPart()
+
+	fmt.Printf("🔍 [CheckTransactionSolana] Checking %s for %d lamports (requested: %s)\n", addr, amountSent, amt)
+
+	startIndex := len(transactions) - max_depth
+	if startIndex < 0 {
+		startIndex = 0
+	}
+
+	for i := startIndex; i < len(transactions); i++ {
+		transaction := transactions[i]
+		if transaction.Address == addr && transaction.Amount == amountSent {
+			fmt.Printf(" [CheckTransactionSolana] MATCH FOUND! Signature: %s\n", transaction.Signature)
+
+			fullTx := fetchFullTransaction(transaction.Signature)
+			if fullTx != nil {
+				fmt.Println(" [CheckTransactionSolana] Full tx data fetched successfully")
+			} else {
+				fmt.Println(" [CheckTransactionSolana] Full tx fetch returned nil")
+			}
+			return true, fullTx
+		}
+	}
+
+	fmt.Printf(" [CheckTransactionSolana] No match found for %s / %d lamports in last %d txs\n", addr, amountSent, max_depth)
+	return false, nil
+}
+// End of CheckTransactionSolana
+
 
 func SetSolWallets(sW map[int]SolWallet) {
   solWallets = sW
@@ -332,4 +372,107 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
   fmt.Println("To:", toAddr[:7])
   fmt.Println("Sent:", amt)
   fmt.Println("sig:", sig[:7])
+}
+
+// fetchFullTransaction gets the complete transaction details including memo
+func fetchFullTransaction(signature string) interface{} {
+	url := "https://api.mainnet-beta.solana.com"
+	requestBody := fmt.Sprintf(`
+	{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "getTransaction",
+		"params": [
+			"%s",
+			"jsonParsed"
+		]
+	}`, signature)
+
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+	if err != nil {
+		fmt.Println("Error creating request:", err)
+		return nil
+	}
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error fetching transaction:", err)
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var txResponse map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
+		fmt.Println("Error decoding transaction JSON:", err)
+		return nil
+	}
+
+	return txResponse["result"] // This contains the full transaction with instructions
+}
+
+// extractSolanaMemo extracts the memo from a Solana transaction response.
+// Supports both raw and jsonParsed transaction formats from Solana RPC.
+func ExtractSolanaMemo(tx interface{}) string {
+	if tx == nil {
+		return ""
+	}
+
+	memo := ""
+
+	// Handle map-based transaction (common from getTransaction RPC response)
+	if txMap, ok := tx.(map[string]interface{}); ok {
+		var instructions []interface{}
+
+		// Path 1: Direct instructions at root level
+		if insts, ok := txMap["instructions"].([]interface{}); ok {
+			instructions = insts
+		}
+
+		// Path 2: Instructions inside message (most common format)
+		if instructions == nil {
+			if message, ok := txMap["message"].(map[string]interface{}); ok {
+				if insts, ok := message["instructions"].([]interface{}); ok {
+					instructions = insts
+				}
+			}
+		}
+
+		// Look for Memo Program instruction
+		for _, inst := range instructions {
+			if instMap, ok := inst.(map[string]interface{}); ok {
+				programID := ""
+
+				// Support both camelCase and PascalCase keys
+				if pid, ok := instMap["programId"].(string); ok {
+					programID = pid
+				} else if pid, ok := instMap["programID"].(string); ok {
+					programID = pid
+				}
+
+				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") {
+					// Extract data (usually base64 encoded)
+					if data, ok := instMap["data"].(string); ok {
+						decoded, err := base64.StdEncoding.DecodeString(data)
+						if err == nil {
+							memo = string(decoded)
+						} else {
+							// Fallback
+							memo = data
+						}
+						break
+					}
+				}
+			}
+		}
+	}
+
+	memo = strings.TrimSpace(memo)
+
+	// Safety limits to prevent spam / huge TTS
+	if len(memo) > 280 {
+		memo = memo[:280]
+	}
+
+	return memo
 }
