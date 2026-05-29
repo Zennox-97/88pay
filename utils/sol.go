@@ -461,49 +461,32 @@ func fetchFullTransaction(signature string) interface{} {
 }
 // End of fetchFUllTransaction
 
-
-// ExtractSolanaMemo extracts the memo from a full Solana getTransaction response (jsonParsed).
-// Now handles the correct nested structure: result.transaction.message.instructions
+// ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
+// Handles standard Memo program, legacy Memo program, and aggressive logMessages fallback
+// (covers Phantom, Ledger Live, Solana CLI, etc.).
 func ExtractSolanaMemo(tx interface{}) string {
 	if tx == nil {
 		fmt.Println("❌ [MEMO] tx was nil")
 		return ""
 	}
 
-	// === DEBUG: Show what we actually received ===
 	fmt.Printf("🔍 [MEMO] Received tx type: %T\n", tx)
-	if txMap, ok := tx.(map[string]interface{}); ok {
-		fmt.Printf("🔍 [MEMO] Top-level keys: %v\n", getMapKeys(txMap))
-	}
 
 	memo := ""
 
 	if txMap, ok := tx.(map[string]interface{}); ok {
+		// Primary path: transaction.message.instructions (most common)
 		var instructions []interface{}
-
-		// Path for getTransaction response: transaction → message → instructions
 		if transaction, ok := txMap["transaction"].(map[string]interface{}); ok {
-			fmt.Println("🔍 [MEMO] Found 'transaction' key")
 			if message, ok := transaction["message"].(map[string]interface{}); ok {
-				fmt.Println("🔍 [MEMO] Found 'message' key")
 				if insts, ok := message["instructions"].([]interface{}); ok {
 					instructions = insts
-					fmt.Printf("🔍 [MEMO] Found %d instructions\n", len(instructions))
+					fmt.Printf("🔍 [MEMO] Found %d instructions in transaction.message\n", len(instructions))
 				}
 			}
 		}
 
-		// Fallback paths (in case format changes)
-		if len(instructions) == 0 {
-			if insts, ok := txMap["instructions"].([]interface{}); ok {
-				instructions = insts
-			} else if message, ok := txMap["message"].(map[string]interface{}); ok {
-				if insts, ok := message["instructions"].([]interface{}); ok {
-					instructions = insts
-				}
-			}
-		}
-
+		// Scan instructions for both Memo programs
 		for i, inst := range instructions {
 			if instMap, ok := inst.(map[string]interface{}); ok {
 				programID := ""
@@ -515,17 +498,47 @@ func ExtractSolanaMemo(tx interface{}) string {
 
 				fmt.Printf("🔍 [MEMO] Instruction %d program: %s\n", i, programID)
 
-				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") {
+				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") ||
+				   strings.Contains(programID, "Memo1Uh8x") { // legacy memo program
 					if data, ok := instMap["data"].(string); ok {
 						decoded, err := base64.StdEncoding.DecodeString(data)
 						if err == nil {
 							memo = string(decoded)
-							fmt.Printf("✅ [MEMO] SUCCESS! Extracted memo: %s\n", memo)
+							fmt.Printf("✅ [MEMO] SUCCESS! Extracted from Memo instruction: %s\n", memo)
 						} else {
 							memo = data
-							fmt.Printf("✅ [MEMO] Fallback memo (not base64): %s\n", memo)
 						}
 						break
+					}
+				}
+			}
+		}
+
+		// Strong fallback for Ledger / other wallets — check logMessages
+		if memo == "" {
+			if meta, ok := txMap["meta"].(map[string]interface{}); ok {
+				if logMessages, ok := meta["logMessages"].([]interface{}); ok {
+					fmt.Printf("🔍 [MEMO] Checking %d logMessages for memo text...\n", len(logMessages))
+					for _, logEntry := range logMessages {
+						if logStr, ok := logEntry.(string); ok {
+							// Common patterns where memo text appears in logs
+							if strings.Contains(logStr, "Memo") || strings.Contains(logStr, "memo") ||
+							   strings.Contains(logStr, "Program MemoSq4gq") || strings.Contains(logStr, "Program Memo1Uh8x") {
+								fmt.Printf("🔍 [MEMO] Potential memo log found: %s\n", logStr)
+								// Try to pull the actual message text
+								if idx := strings.LastIndex(logStr, `"`); idx > 0 {
+									start := strings.LastIndex(logStr[:idx], `"`)
+									if start != -1 && start < idx {
+										possibleMemo := strings.TrimSpace(logStr[start+1 : idx])
+										if len(possibleMemo) > 0 && len(possibleMemo) < 300 {
+											memo = possibleMemo
+											fmt.Printf("✅ [MEMO] SUCCESS! Extracted from logMessages: %s\n", memo)
+											break
+										}
+									}
+								}
+							}
+						}
 					}
 				}
 			}
@@ -538,7 +551,9 @@ func ExtractSolanaMemo(tx interface{}) string {
 	}
 
 	if memo == "" {
-		fmt.Println("⚠️ [MEMO] No memo found in any instruction")
+		fmt.Println("⚠️ [MEMO] No memo found in instructions or logs")
+	} else {
+		fmt.Printf("✅ [MEMO] Final memo for alert/TTS: %s\n", memo)
 	}
 
 	return memo
