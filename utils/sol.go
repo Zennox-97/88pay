@@ -401,48 +401,62 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
 
-	requestBody := fmt.Sprintf(`{
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "getTransaction",
-		"params": [
-			"%s",
-			{
-				"encoding": "jsonParsed",
-				"maxSupportedTransactionVersion": 0
+	for attempt := 1; attempt <= 3; attempt++ { // retry up to 3 times
+		requestBody := fmt.Sprintf(`{
+			"jsonrpc": "2.0",
+			"id": 1,
+			"method": "getTransaction",
+			"params": [
+				"%s",
+				{
+					"encoding": "jsonParsed",
+					"maxSupportedTransactionVersion": 0,
+					"commitment": "finalized"
+				}
+			]
+		}`, signature)
+
+		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+		if err != nil {
+			fmt.Printf("[!][RPC] Request creation error (attempt %d): %v\n", attempt, err)
+			time.Sleep(800 * time.Millisecond)
+			continue
+		}
+
+		client := &http.Client{Timeout: 12 * time.Second}
+		resp, err := client.Do(req)
+		if err != nil {
+			fmt.Printf("[!][RPC] Network error (attempt %d): %v\n", attempt, err)
+			time.Sleep(800 * time.Millisecond)
+			continue
+		}
+		defer resp.Body.Close()
+
+		var txResponse map[string]interface{}
+		if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
+			fmt.Printf("[!][RPC] JSON decode error (attempt %d): %v\n", attempt, err)
+			time.Sleep(800 * time.Millisecond)
+			continue
+		}
+
+		// === DEBUG: Show us exactly what Solana returned ===
+		if result, exists := txResponse["result"]; exists {
+			if result == nil {
+				fmt.Printf("[!][RPC] Transaction %s not yet available (result=null) — attempt %d\n", signature[:12]+"...", attempt)
+			} else {
+				fmt.Printf("[SUCCESS][RPC] Full tx data received for %s\n", signature[:12]+"...")
+				return result
 			}
-		]
-	}`, signature)
+		} else {
+			fmt.Printf("[FAIL][RPC] No 'result' key in response (attempt %d). Full response: %+v\n", attempt, txResponse)
+		}
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
-	if err != nil {
-		fmt.Printf("[ERROR] RPC request create error: %v\n", err)
-		return nil
+		time.Sleep(800 * time.Millisecond) // back-off
 	}
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Printf("[ERROR] RPC fetch error for %s: %v\n", signature[:12]+"...", err)
-		return nil
-	}
-	defer resp.Body.Close()
-
-	var txResponse map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
-		fmt.Printf("[ERROR] JSON decode error: %v\n", err)
-		return nil
-	}
-
-	if result, ok := txResponse["result"]; ok && result != nil {
-		fmt.Printf("[SUCCESS] Fetched full tx for signature %s\n", signature[:12]+"...")
-		return result
-	}
-
-	fmt.Println("[!] No 'result' in RPC response")
+	fmt.Printf("[FAIL][RPC] Failed to fetch tx %s after 3 attempts\n", signature[:12]+"...")
 	return nil
 }
-
 // End of fetchFUllTransaction
 
 
