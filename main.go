@@ -1352,34 +1352,6 @@ func checkDonos() {
 	}
 }
 
-// ProcessNewSolanaDonation handles spontaneous + memo-supported SOL donations
-// Called from utils/sol.go
-func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
-	amountSOL := float64(amountLamports) / 1_000_000_000
-
-	userID := getUserIDBySolAddress(addr)
-	if userID == 0 {
-		fmt.Printf("⚠️ Could not find user for SOL address: %s\n", addr)
-		return
-	}
-
-	message := memo
-	if message == "" {
-		message = "Thank you for the donation! 🔥"
-	}
-
-	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
-		fmt.Sprintf("%.9f", amountSOL), "SOL",
-		getUSDValue(amountSOL, "SOL"), sig)
-
-	if err == nil {
-		fmt.Printf("✅ SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
-	} else {
-		fmt.Printf("❌ Failed to queue SOL donation: %v\n", err)
-	}
-}
-
-
 func getAdminETHAdd() string {
 	user, validUser := getUserByUsernameCached(username)
 
