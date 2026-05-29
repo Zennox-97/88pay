@@ -2,11 +2,12 @@ package utils
 
 import (
     "encoding/base64"
+    "encoding/json"
     "net/http"
     "strings"
-    "context"
-    "encoding/json"
     "fmt"
+    "context"
+    "time"
     //"github.com/davecgh/go-spew/spew"
     //bin "github.com/gagliardetto/binary"
     "bytes"
@@ -15,7 +16,6 @@ import (
     "github.com/portto/solana-go-sdk/client"
     "github.com/shopspring/decimal"
     //"log"
-    "time"
 )
 
 type TransactionResponse struct {
@@ -220,20 +220,31 @@ func addSolanaTransactionStart(addr, sig string) {
   transactions = append(transactions, transaction)
 }
 
+// Update with new version
 func addSolanaTransaction(addr, sig string, amount int64) {
-  // Create a new transaction object
-  transaction := Transaction{
-    Address:   addr,
-    Signature: sig,
-    Amount:    amount,
-  }
-  if amount <= 50000 { //prevent spam and txs out from slowing down search
-    return
-  }
+	transaction := Transaction{
+		Address:   addr,
+		Signature: sig,
+		Amount:    amount,
+	}
 
-  fmt.Println("SOL: "+addr[:5]+"... Recieved:", amount, "lamport.")
-  transactions = append(transactions, transaction)
+	if amount <= 50000 { // prevent dust/spam
+		return
+	}
+
+	fmt.Printf("SOL: %s... Received: %d lamports (%.6f SOL)\n", addr[:5], amount, float64(amount)/1e9)
+
+	// NEW: Fetch full tx + extract memo
+	fullTx := fetchFullTransaction(sig)
+	memo := ExtractSolanaMemo(fullTx)
+
+	// Trigger alert with memo
+	createSolanaDonationAlert(addr, sig, amount, memo)
+
+	transactions = append(transactions, transaction)
 }
+// End of addSolanaTransaction
+
 
 func CreatePendingSolDono(name string, message string, mediaURL string, amountNeeded float64) SuperChat {
   pendingDono := SuperChat{
@@ -422,6 +433,7 @@ func fetchFullTransaction(signature string) interface{} {
 
 // End of fetchFUllTransaction
 
+
 // extractSolanaMemo extracts the memo from a Solana transaction response.
 // Supports both raw and jsonParsed transaction formats from Solana RPC.
 func ExtractSolanaMemo(tx interface{}) string {
@@ -487,3 +499,48 @@ func ExtractSolanaMemo(tx interface{}) string {
 
 	return memo
 }
+
+// getUserIDBySolAddress finds the user ID for a given Solana address
+// (used when processing spontaneous donations)
+func getUserIDBySolAddress(addr string) int {
+	for uid, wallet := range solWallets {  // solWallets is global in main.go
+		if strings.EqualFold(wallet.Address, addr) {
+			return uid
+		}
+	}
+	// Fallback: search globalUsers
+	for _, user := range globalUsers {
+		if strings.EqualFold(user.SolAddress, addr) {
+			return user.UserID
+		}
+	}
+	return 0
+}
+
+// createSolanaDonationAlert creates a full alert + TTS entry with memo support
+func createSolanaDonationAlert(addr, sig string, amountLamports int64, memo string) {
+	amountSOL := float64(amountLamports) / 1_000_000_000
+
+	userID := getUserIDBySolAddress(addr)
+	if userID == 0 {
+		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
+		return
+	}
+
+	message := memo
+	if message == "" {
+		message = "Anonymous Donation"
+	}
+
+	// Use the existing function from main.go
+	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
+		fmt.Sprintf("%.9f", amountSOL), "SOL",
+		getUSDValue(amountSOL, "SOL"), "")
+
+	if err == nil {
+		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
+	} else {
+		fmt.Printf("[ERROR] Failed to create queue entry: %v\n", err)
+	}
+}
+
