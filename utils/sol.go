@@ -462,54 +462,68 @@ func fetchFullTransaction(signature string) interface{} {
 // End of fetchFUllTransaction
 
 
-// extractSolanaMemo extracts the memo from a Solana transaction response.
-// Supports both raw and jsonParsed transaction formats from Solana RPC.
+// ExtractSolanaMemo extracts the memo from a full Solana getTransaction response (jsonParsed).
+// Now handles the correct nested structure: result.transaction.message.instructions
 func ExtractSolanaMemo(tx interface{}) string {
 	if tx == nil {
+		fmt.Println("❌ [MEMO] tx was nil")
 		return ""
+	}
+
+	// === DEBUG: Show what we actually received ===
+	fmt.Printf("🔍 [MEMO] Received tx type: %T\n", tx)
+	if txMap, ok := tx.(map[string]interface{}); ok {
+		fmt.Printf("🔍 [MEMO] Top-level keys: %v\n", getMapKeys(txMap))
 	}
 
 	memo := ""
 
-	// Handle map-based transaction (common from getTransaction RPC response)
 	if txMap, ok := tx.(map[string]interface{}); ok {
 		var instructions []interface{}
 
-		// Path 1: Direct instructions at root level
-		if insts, ok := txMap["instructions"].([]interface{}); ok {
-			instructions = insts
+		// Path for getTransaction response: transaction → message → instructions
+		if transaction, ok := txMap["transaction"].(map[string]interface{}); ok {
+			fmt.Println("🔍 [MEMO] Found 'transaction' key")
+			if message, ok := transaction["message"].(map[string]interface{}); ok {
+				fmt.Println("🔍 [MEMO] Found 'message' key")
+				if insts, ok := message["instructions"].([]interface{}); ok {
+					instructions = insts
+					fmt.Printf("🔍 [MEMO] Found %d instructions\n", len(instructions))
+				}
+			}
 		}
 
-		// Path 2: Instructions inside message (most common format)
-		if instructions == nil {
-			if message, ok := txMap["message"].(map[string]interface{}); ok {
+		// Fallback paths (in case format changes)
+		if len(instructions) == 0 {
+			if insts, ok := txMap["instructions"].([]interface{}); ok {
+				instructions = insts
+			} else if message, ok := txMap["message"].(map[string]interface{}); ok {
 				if insts, ok := message["instructions"].([]interface{}); ok {
 					instructions = insts
 				}
 			}
 		}
 
-		// Look for Memo Program instruction
-		for _, inst := range instructions {
+		for i, inst := range instructions {
 			if instMap, ok := inst.(map[string]interface{}); ok {
 				programID := ""
-
-				// Support both camelCase and PascalCase keys
 				if pid, ok := instMap["programId"].(string); ok {
 					programID = pid
 				} else if pid, ok := instMap["programID"].(string); ok {
 					programID = pid
 				}
 
+				fmt.Printf("🔍 [MEMO] Instruction %d program: %s\n", i, programID)
+
 				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") {
-					// Extract data (usually base64 encoded)
 					if data, ok := instMap["data"].(string); ok {
 						decoded, err := base64.StdEncoding.DecodeString(data)
 						if err == nil {
 							memo = string(decoded)
+							fmt.Printf("✅ [MEMO] SUCCESS! Extracted memo: %s\n", memo)
 						} else {
-							// Fallback
 							memo = data
+							fmt.Printf("✅ [MEMO] Fallback memo (not base64): %s\n", memo)
 						}
 						break
 					}
@@ -519,13 +533,22 @@ func ExtractSolanaMemo(tx interface{}) string {
 	}
 
 	memo = strings.TrimSpace(memo)
-
-	// Safety limits to prevent spam / huge TTS
 	if len(memo) > 280 {
 		memo = memo[:280]
+	}
+
+	if memo == "" {
+		fmt.Println("⚠️ [MEMO] No memo found in any instruction")
 	}
 
 	return memo
 }
 
-
+// Helper to print map keys for debugging (add this too)
+func getMapKeys(m map[string]interface{}) []string {
+	keys := []string{}
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
