@@ -1912,20 +1912,25 @@ func checkUnfulfilledDonos() []utils.Dono {
 			}
 			updateDonoInMap(dono)
 		} else if dono.CurrencyType == "SOL" {	
-		    log.Println("🔍 Checking SOL transaction for:", dono.AmountToSend)
+		    // New dono.CurrencyType Solana flow
+            log.Printf("🔍 [checkDonos] Checking SOL for pre-created dono: %s SOL to %s", dono.AmountToSend, dono.Address)
     
             found, txData := utils.CheckTransactionSolana(dono.AmountToSend, dono.Address, 100)
     
             if found {
                 memo := utils.ExtractSolanaMemo(txData)
-        
+                
                 dono.AmountSent, _ = utils.PruneStringByDecimalPoints(dono.AmountToSend, 5)
-        
-                if memo != "" && memo != dono.Message {
-                    log.Printf("SOL Memo found for TTS: %s", memo)
-                    dono.Message = memo  // This is what feeds TTS + alert box
-                } else if memo == "" {
-                    log.Println("No memo found in transaction")
+                
+                if memo != "" {
+                    log.Printf("[SUCCESS] SOL Memo found for TTS + Alert: %s", memo)
+                    dono.Message = memo
+                } else {
+                    log.Println("[!] No memo found in this transaction")
+                    // Default fallback message
+                    if dono.Message == "" {
+                        dono.Message = "Anonymous Donation!"
+                    }
                 }
         
                 addDonoToDonoBar(dono.AmountSent, dono.CurrencyType, dono.UserID)
@@ -1934,10 +1939,9 @@ func checkUnfulfilledDonos() []utils.Dono {
                 fulfilledDonos = append(fulfilledDonos, dono)
                 updateDonoInMap(dono)
                 continue
+            } else {
+                log.Println("[!] No matching pre-created SOL transaction found yet")
             }
-
-
-        
         }
 	}
 	updateDonosInDB()

@@ -377,39 +377,50 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
 // fetchFullTransaction gets the complete transaction details including memo
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
-	requestBody := fmt.Sprintf(`
-	{
+
+	requestBody := fmt.Sprintf(`{
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "getTransaction",
 		"params": [
 			"%s",
-			"jsonParsed"
+			{
+				"encoding": "jsonParsed",
+				"maxSupportedTransactionVersion": 0
+			}
 		]
 	}`, signature)
 
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
 	if err != nil {
-		fmt.Println("Error creating request:", err)
+		fmt.Printf("[ERROR] RPC request create error: %v\n", err)
 		return nil
 	}
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		fmt.Println("Error fetching transaction:", err)
+		fmt.Printf("[ERROR] RPC fetch error for %s: %v\n", signature[:12]+"...", err)
 		return nil
 	}
 	defer resp.Body.Close()
 
 	var txResponse map[string]interface{}
 	if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
-		fmt.Println("Error decoding transaction JSON:", err)
+		fmt.Printf("[ERROR] JSON decode error: %v\n", err)
 		return nil
 	}
 
-	return txResponse["result"] // This contains the full transaction with instructions
+	if result, ok := txResponse["result"]; ok && result != nil {
+		fmt.Printf("[SUCCESS] Fetched full tx for signature %s\n", signature[:12]+"...")
+		return result
+	}
+
+	fmt.Println("[!] No 'result' in RPC response")
+	return nil
 }
+
+// End of fetchFUllTransaction
 
 // extractSolanaMemo extracts the memo from a Solana transaction response.
 // Supports both raw and jsonParsed transaction formats from Solana RPC.
