@@ -294,6 +294,9 @@ func main() {
 
 	go startWallets()
 
+    // Set up callback for new SOL donations with memo support
+	utils.SetSolanaDonationCallback(ProcessNewSolanaDonation)
+
 	time.Sleep(5 * time.Second)
 	log.Println("Starting server")
 
@@ -1348,6 +1351,34 @@ func checkDonos() {
 		time.Sleep(time.Duration(25) * time.Second)
 	}
 }
+
+// ProcessNewSolanaDonation handles spontaneous + memo-supported SOL donations
+// Called from utils/sol.go
+func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
+	amountSOL := float64(amountLamports) / 1_000_000_000
+
+	userID := getUserIDBySolAddress(addr)
+	if userID == 0 {
+		fmt.Printf("⚠️ Could not find user for SOL address: %s\n", addr)
+		return
+	}
+
+	message := memo
+	if message == "" {
+		message = "Thank you for the donation! 🔥"
+	}
+
+	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
+		fmt.Sprintf("%.9f", amountSOL), "SOL",
+		getUSDValue(amountSOL, "SOL"), sig)
+
+	if err == nil {
+		fmt.Printf("✅ SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
+	} else {
+		fmt.Printf("❌ Failed to queue SOL donation: %v\n", err)
+	}
+}
+
 
 func getAdminETHAdd() string {
 	user, validUser := getUserByUsernameCached(username)
@@ -4329,6 +4360,22 @@ func getNewUser(username string, hashedPassword []byte) utils.User {
 	return user
 }
 
+// getUserIDBySolAddress finds user by SOL address
+func getUserIDBySolAddress(addr string) int {
+	for uid, wallet := range solWallets {
+		if strings.EqualFold(wallet.Address, addr) {
+			return uid
+		}
+	}
+	// Fallback
+	for _, user := range globalUsers {
+		if strings.EqualFold(user.SolAddress, addr) {
+			return user.UserID
+		}
+	}
+	return 0
+}
+
 func createNewUserFromPending(user_ utils.PendingUser) error {
 	log.Println("running createNewUserFromPending")
 
@@ -4584,6 +4631,37 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	err := payTemplate.Execute(w, s)
 	if err != nil {
 		fmt.Println(err)
+	}
+}
+
+// SetSolanaDonationCallback allows utils/sol.go to call back into main
+func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo string)) {
+	utils.processNewSolDonation = fn
+}
+
+// ProcessNewSolanaDonation handles spontaneous donations + memo for TTS/alert
+func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
+	amountSOL := float64(amountLamports) / 1_000_000_000
+
+	userID := getUserIDBySolAddress(addr)
+	if userID == 0 {
+		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
+		return
+	}
+
+	message := memo
+	if message == "" {
+		message = "Anonymous Donation"
+	}
+
+	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
+		fmt.Sprintf("%.9f", amountSOL), "SOL",
+		getUSDValue(amountSOL, "SOL"), sig)
+
+	if err == nil {
+		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
+	} else {
+		fmt.Printf("[ERROR] Failed to queue SOL donation: %v\n", err)
 	}
 }
 

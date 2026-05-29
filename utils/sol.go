@@ -76,6 +76,9 @@ type SolWallet struct {
   Amount  float64 `json:"amount"`
 }
 
+// processNewSolDonation is a callback set from main.go
+var processNewSolDonation func(addr, sig string, amount int64, memo string)
+
 // Define a slice of Transaction objects
 var transactions []Transaction
 var solWallets = map[int]SolWallet{}
@@ -220,7 +223,7 @@ func addSolanaTransactionStart(addr, sig string) {
   transactions = append(transactions, transaction)
 }
 
-// Update with new version
+// addSolanaTransaction is called when a new incoming SOL tx is detected
 func addSolanaTransaction(addr, sig string, amount int64) {
 	transaction := Transaction{
 		Address:   addr,
@@ -234,12 +237,14 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 
 	fmt.Printf("SOL: %s... Received: %d lamports (%.6f SOL)\n", addr[:5], amount, float64(amount)/1e9)
 
-	// NEW: Fetch full tx + extract memo
+	// Fetch memo
 	fullTx := fetchFullTransaction(sig)
 	memo := ExtractSolanaMemo(fullTx)
 
-	// Trigger alert with memo
-	createSolanaDonationAlert(addr, sig, amount, memo)
+	// NEW: Call exported helper in main package via a global callback (best pattern here)
+	if processNewSolDonation != nil {
+		processNewSolDonation(addr, sig, amount, memo)
+	}
 
 	transactions = append(transactions, transaction)
 }
@@ -500,47 +505,4 @@ func ExtractSolanaMemo(tx interface{}) string {
 	return memo
 }
 
-// getUserIDBySolAddress finds the user ID for a given Solana address
-// (used when processing spontaneous donations)
-func getUserIDBySolAddress(addr string) int {
-	for uid, wallet := range solWallets {  // solWallets is global in main.go
-		if strings.EqualFold(wallet.Address, addr) {
-			return uid
-		}
-	}
-	// Fallback: search globalUsers
-	for _, user := range globalUsers {
-		if strings.EqualFold(user.SolAddress, addr) {
-			return user.UserID
-		}
-	}
-	return 0
-}
-
-// createSolanaDonationAlert creates a full alert + TTS entry with memo support
-func createSolanaDonationAlert(addr, sig string, amountLamports int64, memo string) {
-	amountSOL := float64(amountLamports) / 1_000_000_000
-
-	userID := getUserIDBySolAddress(addr)
-	if userID == 0 {
-		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
-		return
-	}
-
-	message := memo
-	if message == "" {
-		message = "Anonymous Donation"
-	}
-
-	// Use the existing function from main.go
-	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
-		fmt.Sprintf("%.9f", amountSOL), "SOL",
-		getUSDValue(amountSOL, "SOL"), "")
-
-	if err == nil {
-		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
-	} else {
-		fmt.Printf("[ERROR] Failed to create queue entry: %v\n", err)
-	}
-}
 
