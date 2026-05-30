@@ -47,7 +47,8 @@ var MessageMaxChar int = 250
 var NameMaxChar int = 25
 var starting_port int = 28088
 
-var host_url string = "https://ferret.cash/"
+// Default page when loading "127.0.0.1:8900"
+var host_url string = "http://127.0.0.1:8900/login"
 
 var addressSliceSolana []utils.AddressSolana
 
