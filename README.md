@@ -55,14 +55,24 @@ This is currently designed to be run on a cloud server with nginx proxypass for 
 - Visit 127.0.0.1:8900/progressbar to see the OBS progressbar which gets modified in the OBS settings url
 - The default username is `admin` and password `hunter123`. Change these in the http://127.0.0.1:8900/user panel
 
-# License
-GPLv3
+## License
 
-### Origin
-This comes from [https://git.sr.ht/~anon_/shadowchat](https://git.sr.ht/~anon_/shadowchat) and the base logic (mostly rewritten now) is not Paul's original
-work, although without the base logic I would have never started doing this, so thank you to the great mind behind this.
+**88pay** is licensed under the **GNU General Public License v3.0** (GPLv3).
+
+See the [LICENSE](LICENSE) file for the full license text.
+
+### Credits & Origin
+
+- **88pay** is a fork and active development of [paulpay](https://github.com/pautown/paulpay) by **Paul Town**.
+- The base logic originally comes from [shadowchat](https://git.sr.ht/~anon_/shadowchat) (thank you to the anonymous author — without that foundation this project wouldn't exist).
+- Major rewrites, Solana support, memo parsing, Windows workflow, and streamer-focused features added by **Zennox-97**.
+
+Thank you to everyone who contributed to the original code!
 
 ### Donate
 
-To support further development of this project, send XMR to me (Paul) at:
+To support Paul who this fork would not be possible without, send XMR to his wallet here:
 `88K988HXHBTZZEFACejzJRDe7zMiKviesFKWtq4Q3Bo6VZfPZDWFzbod4Kn7SudVSBKhu5GqMUqBUXFNj5wBLyWuNWe4nqN`
+
+To support me (Zennox) please send Solana to this address
+`5Ci84K1CJRVyWJHkxhsNuscBsXQZN7zG5AuVqWYYnjtf`

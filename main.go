@@ -1,5 +1,9 @@
 package main
 
+// Copyright (C) 2025-2026 Zennox-97
+// This file is part of 88pay, licensed under GPLv3.
+// See LICENSE for details.
+
 import (
 	"bytes"
 	"database/sql"
