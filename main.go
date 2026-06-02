@@ -3821,24 +3821,31 @@ func getIPAddress(r *http.Request) string {
 	return ip
 }
 
-func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
-	err := indexTemplate.Execute(w, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
+    func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
+        
+        err := indexTemplate.Execute(w, nil)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+    }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+    func indexHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Ignore requests for the favicon
-	if r.URL.Path == "/favicon.ico" {
-		return
-	}
-	// Get the username from the URL path
-	username := r.URL.Path[1:]
+        // Ignore requests for the favicon
+        if r.URL.Path == "/favicon.ico" {
+            return
+        }
+        // Get the username from the URL path
+        username := r.URL.Path[1:]
 
-	username = strings.ToLower(username)
+        // Attempt to change the landing pag
+        if r.URL.Path == "/" || r.URL.Path == "" {
+            http.Redirect(w, r, "/user", http.StatusFound)
+            return
+        }
+
+    username = strings.ToLower(username)
 	user_, valid := getUserByUsernameCached(username)
 	// Calculate all minimum donations
 	user := globalUsers[user_.UserID]

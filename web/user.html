@@ -250,11 +250,7 @@ function applyLink(description) {
   <p> <b style="color: lightsteelblue;"> Total Earnings: </b> ${{.User.BillingData.AmountTotal}}</p>
   <p>
   <b style="color: lightsteelblue;"> Monthly Earnings: </b> ${{.User.BillingData.AmountThisMonth}} <b style="color: lightsteelblue;">  <small>(3% Fee: </b> <span id="threePercent"></span>) </small></p>
-  <button type="button" id="payment-button">
-    <b style="color: lightsteelblue;"> Days until next payment: </b> 
-    <span id="days-left"></span>
-  </button>
-    
+
 
 
   
@@ -266,7 +262,7 @@ function applyLink(description) {
     <b style="color: yellow;">uploaded and pending</b>
   {{else}}
     <b>not yet uploaded, or view-only wallet uploaded not valid (ensure view-only wallet is generated without password.)</b>
-  {{end}}
+  {{end}} 
 </p>
 
   <form method="GET" action="/cryptosettings">
