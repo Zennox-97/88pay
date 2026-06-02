@@ -473,8 +473,8 @@ func setupRoutes() {
 		{"/check_donation_status/", checkDonationStatusHandler},
 		{"/donations", donationsHandler},
 		{"/", indexHandler},
-		{"/termsofservice", tosHandler},
-		{"/pay", paymentHandler},
+	//	{"/termsofservice", tosHandler},
+	//	{"/pay", paymentHandler},
 		{"/alert", alertOBSHandler},
 		{"/viewdonos", viewDonosHandler},
 		{"/replaydono", replayDonoHandler},
@@ -486,10 +486,10 @@ func setupRoutes() {
 		{"/logout", logoutHandler},
 		{"/changepassword", changePasswordHandler},
 		{"/changeuser", changeUserHandler},
-		{"/register", registerUserHandler},
-		{"/newaccount", newAccountHandler},
+	//	{"/register", registerUserHandler},
+	//	{"/newaccount", newAccountHandler},
 		{"/overflow", overflowHandler},
-		{"/billing", accountBillingHandler},
+	//	{"/billing", accountBillingHandler},
 		{"/changeusermonero", changeUserMoneroHandler},
 		{"/usermanager", allUsersHandler},
 		{"/refresh", refreshHandler},
@@ -3839,7 +3839,7 @@ func getIPAddress(r *http.Request) string {
         // Get the username from the URL path
         username := r.URL.Path[1:]
 
-        // Attempt to change the landing pag
+        // Set webserver default page
         if r.URL.Path == "/" || r.URL.Path == "" {
             http.Redirect(w, r, "/user", http.StatusFound)
             return

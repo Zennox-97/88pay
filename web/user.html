@@ -108,19 +108,6 @@ document.getElementById('threePercent').textContent = `$${threePercent.toFixed(2
 
   // Calculate the difference between the current date and the target date
   const timeDiff = targetDate.getTime() - currentDate.getTime();
-  const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
-
-  // Update the text content of the <span> element with the number of days left
-  document.getElementById("days-left").textContent = daysLeft.toString();
-
-
-  const paymentButton = document.getElementById('payment-button');
-  if (daysLeft <= 0) {
-    paymentButton.innerHTML = 'Pay 3% Fee';
-    paymentButton.addEventListener('click', function() {
-      window.location.href = "/billing";
-    });
-  }
 };
 
 function updateLinks() {
@@ -252,18 +239,6 @@ function applyLink(description) {
   <b style="color: lightsteelblue;"> Monthly Earnings: </b> ${{.User.BillingData.AmountThisMonth}} <b style="color: lightsteelblue;">  <small>(3% Fee: </b> <span id="threePercent"></span>) </small></p>
 
 
-
-  
-  <p id="media-status">
-  <b style="color: lightsteelblue;">Monero Wallet: </b>
-  {{if and (not .User.WalletPending) .User.WalletUploaded}}
-    <b style="color: lightseagreen;">running</b>
-  {{else if and .User.WalletPending .User.WalletUploaded}}
-    <b style="color: yellow;">uploaded and pending</b>
-  {{else}}
-    <b>not yet uploaded, or view-only wallet uploaded not valid (ensure view-only wallet is generated without password.)</b>
-  {{end}} 
-</p>
 
   <form method="GET" action="/cryptosettings">
     <button style="padding: 0 10px; margin-right: 10px; display: inline-block;">View/Change Crypto Settings</button>
