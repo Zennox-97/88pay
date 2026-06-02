@@ -16,6 +16,7 @@ import (
     "github.com/portto/solana-go-sdk/client"
     "github.com/shopspring/decimal"
     //"log"
+    "os"
 )
 
 type TransactionResponse struct {
@@ -94,11 +95,38 @@ var processedSignatures = make(map[string]bool)
 // Track tx's already processed per wallet address | Stop looping through every tx on server start
 var lastProcessedSig = make(map[string]solana.Signature)
 
+// persistLastSig writes the last processed signature for a wallet so we don't
+// re-scan the same history after every server restart.
+func persistLastSig(walletAddr string, sig solana.Signature) {
+	data := map[string]string{
+		walletAddr: sig.String(),
+	}
+	b, _ := json.MarshalIndent(data, "", "  ")
+	_ = os.WriteFile("last_sigs.json", b, 0644)
+}
+
+// loadLastSigs reads previously saved signatures on startup.
+func loadLastSigs() {
+	b, err := os.ReadFile("last_sigs.json")
+	if err != nil {
+		return
+	}
+	var data map[string]string
+	if json.Unmarshal(b, &data) == nil {
+		for addr, sigStr := range data {
+			if sig, err := solana.SignatureFromBase58(sigStr); err == nil {
+				lastProcessedSig[addr] = sig
+			}
+		}
+	}
+}
+
 
 func StartMonitoringSolana() {
-  for {
-    getTransactionsForAddresses()
-  }
+    loadLastSigs()      // Restore cursor position and stop repeating previous tx's
+    for {
+        getTransactionsForAddresses()
+    }
 }
 
 // New CheckTransactionSolana
@@ -192,6 +220,7 @@ func getTransactionsForAddresses() {
 		for _, sigInfo := range out {
 			// Advance the cursor so we don't re-fetch this signature next loop
 			lastProcessedSig[wallet.Address] = sigInfo.Signature
+            persistLastSig(wallet.Address, sigInfo.Signature)
 
 			sigStr := sigInfo.Signature.String()
 
@@ -228,7 +257,7 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 		return
 	}
 
-	fmt.Printf("SOL: %s... Received: %d lamports (%.6f SOL)\n", addr[:5], amount, float64(amount)/1e9)
+	//fmt.Printf("SOL: %s... Received: %d lamports (%.6f SOL)\n", addr[:5], amount, float64(amount)/1e9)
 
 	// Fetch memo
 	fullTx := fetchFullTransaction(sig)
