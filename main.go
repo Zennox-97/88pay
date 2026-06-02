@@ -51,7 +51,8 @@ var MessageMaxChar int = 250
 var NameMaxChar int = 25
 var starting_port int = 28088
 
-var host_url string = "https://ferret.cash/"
+// Default page when loading "127.0.0.1:8900"
+var host_url string = "http://127.0.0.1:8900/login"
 
 var addressSliceSolana []utils.AddressSolana
 
@@ -298,6 +299,9 @@ func main() {
 
 	go startWallets()
 
+    // Set up callback for new SOL donations with memo support
+	utils.SetSolanaDonationCallback(ProcessNewSolanaDonation)
+
 	time.Sleep(5 * time.Second)
 	log.Println("Starting server")
 
@@ -473,8 +477,8 @@ func setupRoutes() {
 		{"/check_donation_status/", checkDonationStatusHandler},
 		{"/donations", donationsHandler},
 		{"/", indexHandler},
-		{"/termsofservice", tosHandler},
-		{"/pay", paymentHandler},
+	//	{"/termsofservice", tosHandler},
+	//	{"/pay", paymentHandler},
 		{"/alert", alertOBSHandler},
 		{"/viewdonos", viewDonosHandler},
 		{"/replaydono", replayDonoHandler},
@@ -486,16 +490,16 @@ func setupRoutes() {
 		{"/logout", logoutHandler},
 		{"/changepassword", changePasswordHandler},
 		{"/changeuser", changeUserHandler},
-		{"/register", registerUserHandler},
-		{"/newaccount", newAccountHandler},
+	//	{"/register", registerUserHandler},
+	//	{"/newaccount", newAccountHandler},
 		{"/overflow", overflowHandler},
-		{"/billing", accountBillingHandler},
+	//	{"/billing", accountBillingHandler},
 		{"/changeusermonero", changeUserMoneroHandler},
 		{"/usermanager", allUsersHandler},
 		{"/refresh", refreshHandler},
 		{"/testdonation", testDonoHandler},
-		{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
-		{"/generatecodes", generateCodesHandler},
+	//	{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
+	//	{"/generatecodes", generateCodesHandler},
 		{"/cryptosettings", cryptoSettingsHandler},
 	}
 
@@ -701,6 +705,7 @@ func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+/* Obsolete, commenting and imminent deletion
 func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
 		generateMoreInviteCodes(5)
@@ -712,7 +717,9 @@ func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+*/
 
+/*
 func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if checkLoggedInAdmin(w, r) {
@@ -725,6 +732,8 @@ func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+*/
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
@@ -974,11 +983,8 @@ func getUserLinks(user utils.User) ([]utils.Link, error) {
 	if user.Links == "" {
 		// Insert default links for the user
 		defaultLinks := []utils.Link{
-			{URL: "https://powerchat.live/paultown?tab=donation", Description: "Powerchat"},
-			{URL: "https://cozy.tv/paultown", Description: "cozy.tv/paultown"},
-			{URL: "http://twitter.paul.town/", Description: "Twitter"},
-			{URL: "https://t.me/paultownreal", Description: "Telegram"},
-			{URL: "http://notes.paul.town/", Description: "notes.paul.town"},
+			{URL: "https://88streams.com/", Description: "88 Streams"},
+			{URL: "https://t.me/zenny97", Description: "Zennox's Telegram"},
 		}
 
 		jsonLinks, err := json.Marshal(defaultLinks)
@@ -1915,18 +1921,38 @@ func checkUnfulfilledDonos() []utils.Dono {
 				continue
 			}
 			updateDonoInMap(dono)
-		} else if dono.CurrencyType == "SOL" {
-			log.Println("SOLANA DONO AMOUNT NEEDED:", dono.AmountToSend)
-			if utils.CheckTransactionSolana(dono.AmountToSend, dono.Address, 100) {
-				dono.AmountSent, _ = utils.PruneStringByDecimalPoints(dono.AmountToSend, 5)
-				addDonoToDonoBar(dono.AmountSent, dono.CurrencyType, dono.UserID) // change Amount To Send to USD value of sent
-				dono.Fulfilled = true
-				dono.EncryptedIP = ""
-				fulfilledDonos = append(fulfilledDonos, dono)
-				updateDonoInMap(dono)
-				continue
-			}
-		}
+		} else if dono.CurrencyType == "SOL" {	
+		    // New dono.CurrencyType Solana flow
+            log.Printf("🔍 [checkDonos] Checking SOL for pre-created dono: %s SOL to %s", dono.AmountToSend, dono.Address)
+    
+            found, txData := utils.CheckTransactionSolana(dono.AmountToSend, dono.Address, 100)
+    
+            if found {
+                memo := utils.ExtractSolanaMemo(txData)
+                
+                dono.AmountSent, _ = utils.PruneStringByDecimalPoints(dono.AmountToSend, 5)
+                
+                if memo != "" {
+                    log.Printf("[SUCCESS] SOL Memo found for TTS + Alert: %s", memo)
+                    dono.Message = memo
+                } else {
+                    log.Println("[!] No memo found in this transaction")
+                    // Default fallback message
+                    if dono.Message == "" {
+                        dono.Message = "Anonymous Donation!"
+                    }
+                }
+        
+                addDonoToDonoBar(dono.AmountSent, dono.CurrencyType, dono.UserID)
+                dono.Fulfilled = true
+                dono.EncryptedIP = ""
+                fulfilledDonos = append(fulfilledDonos, dono)
+                updateDonoInMap(dono)
+                continue
+            } else {
+                log.Println("[!] No matching pre-created SOL transaction found yet")
+            }
+        }
 	}
 	updateDonosInDB()
 	removeFulfilledDonos(fulfilledDonos)
@@ -2337,8 +2363,6 @@ func createDatabaseIfNotExists(db *sql.DB) error {
 	}
 
 	createAdminUser()
-	createNewUser("paul", "hunter")
-
 	return nil
 }
 
@@ -3801,24 +3825,31 @@ func getIPAddress(r *http.Request) string {
 	return ip
 }
 
-func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
-	err := indexTemplate.Execute(w, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
+    func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
+        
+        err := indexTemplate.Execute(w, nil)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+    }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+    func indexHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Ignore requests for the favicon
-	if r.URL.Path == "/favicon.ico" {
-		return
-	}
-	// Get the username from the URL path
-	username := r.URL.Path[1:]
+        // Ignore requests for the favicon
+        if r.URL.Path == "/favicon.ico" {
+            return
+        }
+        // Get the username from the URL path
+        username := r.URL.Path[1:]
 
-	username = strings.ToLower(username)
+        // Set webserver default page
+        if r.URL.Path == "/" || r.URL.Path == "" {
+            http.Redirect(w, r, "/user", http.StatusFound)
+            return
+        }
+
+    username = strings.ToLower(username)
 	user_, valid := getUserByUsernameCached(username)
 	// Calculate all minimum donations
 	user := globalUsers[user_.UserID]
@@ -4313,6 +4344,22 @@ func getNewUser(username string, hashedPassword []byte) utils.User {
 	return user
 }
 
+// getUserIDBySolAddress finds user by SOL address
+func getUserIDBySolAddress(addr string) int {
+	for uid, wallet := range solWallets {
+		if strings.EqualFold(wallet.Address, addr) {
+			return uid
+		}
+	}
+	// Fallback
+	for _, user := range globalUsers {
+		if strings.EqualFold(user.SolAddress, addr) {
+			return user.UserID
+		}
+	}
+	return 0
+}
+
 func createNewUserFromPending(user_ utils.PendingUser) error {
 	log.Println("running createNewUserFromPending")
 
@@ -4571,6 +4618,34 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	}
 }
 
+// ProcessNewSolanaDonation handles spontaneous donations + memo for TTS/alert
+func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
+	amountSOL := float64(amountLamports) / 1_000_000_000
+
+	userID := getUserIDBySolAddress(addr)
+	if userID == 0 {
+		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
+		return
+	}
+
+	message := memo
+	if message == "" {
+		message = "Anonymous Donation"
+	}
+
+	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
+		fmt.Sprintf("%.9f", amountSOL), "SOL",
+		getUSDValue(amountSOL, "SOL"), sig)
+
+	if err == nil {
+		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
+	} else {
+		fmt.Printf("[ERROR] Failed to queue SOL donation: %v\n", err)
+	}
+}
+
+
+/*** SOLANA PROCESSOR - ADD MEMO PARSING SOMEWHER HERE ***/
 func handleSolanaPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, params url.Values, name_ string, message_ string, amount_ float64, showAmount_ bool, media_ string, encrypted_ip string, USDAmount float64, userID int) {
 	// Get Solana address and desired balance from request
 	address := getSolAddressByID(userID)

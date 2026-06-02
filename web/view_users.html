@@ -1,89 +1,49 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <br>
-    <link href=style.css rel=stylesheet>
-    <link href=fcash.png rel=icon>
-    <title>{{.Title}}</title>
+    <img src="indexfcash.png" alt="logo broken"/>
+    <title>88 Pay - Users Dashboard</title>
     <style>
-
-        th, td {
-            padding: 10px;
-            text-align: left;
-            vertical-align: top;
-            border-bottom: 1px solid #ddd;
+        body { 
+            font-family: Arial, sans-serif;
+            background: #111; 
+            color: #eee;
+            padding: 20px;
+            text-align:center;
         }
-
-
-
-        tr:nth-child(even) {
-            background-color: #1E2128;
-        }
-
-        tr:hover {
-            background-color: #0D0E11;
-        }
+        table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        th, td { border: 1px solid #444; padding: 12px; text-align: left; }
+        th { background: #222; }
+        a { color: #0f0; }
+        .small { font-size: 0.9em; color: #aaa; }
+        button.delete { background: #c33; color: white; border: none; padding: 4px 8px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <h1>{{.Title}}</h1>
-    <div style="display: flex; align-items: center; margin-right: 10px;">
-      <form method="GET" action="/viewdonos">
-        <button style="padding: 0 10px 0;">View Donations</button>
-      </form>
-      <form method="GET" action="/user">
-        <button style="padding: 0 10px 0;">User Settings</button>
-      </form>
-      <form method="GET" action="/userobs">
-        <button style="padding: 0 10px; margin-right: 10px; display: inline-block;">OBS Settings</button>
-      </form>
-  </div>
+    <h1>88 Pay - Admin Users Dashboard</h1>
+    <p><a href="/user">← Back to Admin Panel</a></p>
 
-  <span><b style="color: lightsteelblue;"> User Registrations Open: </b> {{.RegistrationOpen}}</span>
-  <form method="POST" action="/toggleUserRegistrations"><input type="submit" value="Toggle User Registrations"></form>
-
-
-  <form method="POST" action="/generatecodes"><input type="submit" value="Generate 5 Invite Codes"></form>
- 
-
+    <h2>Registered Users</h2>
     <table>
-        <thead>
-            <tr>
-                <th>Invite Code</th>
-                <th>Active</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .InviteCodes}}
-            <tr>
-                <td>{{.Value}}</td>
-                <td>{{if .Active}}Active{{else}}Used{{end}}</td>
-            </tr>
-            {{end}}
-        </tbody>
+        <tr>
+            <th>User ID</th>
+            <th>Username</th>
+            <th>Date Enabled</th>
+            <th>Actions</th>
+        </tr>
+        {{range $id, $user := .Users}}
+        <tr>
+            <td>{{$id}}</td>
+            <td>{{$user.Username}}</td>
+            <td>{{$user.DateEnabled}}</td>
+            <td>
+                <a href="/viewdonos">View Donations</a> |
+                <a href="/user?username={{$user.Username}}">Edit</a> 
+            </td>
+        </tr>
+        {{end}}
     </table>
-</body>
 
-    
-    <table>
-        <thead>
-            <tr>
-                <th>User ID</th>
-                <th>Username</th>
-                <th>Enabled Date</th>
-                <th>Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .Users}}
-            <tr>
-                <td>{{.UserID}}</td>
-                <td>{{.Username}}</td>
-                <td>{{.BillingData.UpdatedAt.Format "2006-01-02"}}</td>
-                <td><form method="POST" action="/refresh"><input type="hidden" name="username" value="{{.Username}}"><input type="submit" value="Refresh"></form></td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
+    <p class="small">88 Pay is self-hosted. — only admin user needed.</p>
 </body>
 </html>

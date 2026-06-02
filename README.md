@@ -1,5 +1,10 @@
 # 88Pay
 
+Free, self-hosted crypto donation service that interfaces with OBS.
+You cannot be debanked, you cannot be censored. This is to be used by anybody who wants to stream and accept donations
+
+
+
 - Self-hosted, noncustodial crypto-currency (currently Monero(XMR), Ethereum(ETH), Solana(SOL), PAINT, HEX, MATIC, BUSD, SHIBA_INU, USDC, TETHER, WBTC, and PNK ) superchat system written in Go.
 - [SOON] Reads TTS messages from Solana transaction memo fields for viewer interaction.
 - [SOON] Word filtering for TTS
@@ -48,31 +53,26 @@ This is currently designed to be run on a cloud server with nginx proxypass for 
 3. Download the `monero-wallet-rpc` binary that is bundled with the getmonero.org wallets.
 4. Place the 'monero-wallet-rpc' inside monero folder
 
-# Usage
+# How to access everything
+IMMEDIATELY CHANGE THE ADMIN PASSWORD
 - Visit 127.0.0.1:8900/user to view your user settings
 - Visit 127.0.0.1:8900/userobs to view your user OBS settings
 - Visit 127.0.0.1:8900/alert to see notifications (only have one of these open at a time, preferrably in the OBS screen)
 - Visit 127.0.0.1:8900/progressbar to see the OBS progressbar which gets modified in the OBS settings url
 - The default username is `admin` and password `hunter123`. Change these in the http://127.0.0.1:8900/user panel
 
-## License
+# License
+GPLv3
 
-**88pay** is licensed under the **GNU General Public License v3.0** (GPLv3).
+### Origin
+The original fork has this text
 
-See the [LICENSE](LICENSE) file for the full license text.
+"This comes from [https://git.sr.ht/~anon_/shadowchat](https://git.sr.ht/~anon_/shadowchat) and the base logic (mostly rewritten now) is not Paul's original
+work, although without the base logic I would have never started doing this, so thank you to the great mind behind this."
 
-### Credits & Origin
-
-- **88pay** is a fork and active development of [paulpay](https://github.com/pautown/paulpay) by **Paul Town**.
-- The base logic originally comes from [shadowchat](https://git.sr.ht/~anon_/shadowchat) (thank you to the anonymous author — without that foundation this project wouldn't exist).
-- Major rewrites, Solana support, memo parsing, Windows workflow, and streamer-focused features added by **Zennox-97**.
-
-Thank you to everyone who contributed to the original code!
+This is a fork from [fork source here]. Would not have been possible without Paul's work, which is now being modified by me.
 
 ### Donate
 
-To support Paul who this fork would not be possible without, send XMR to his wallet here:
+To support the original creator of this project, send XMR to me Paul Town at:
 `88K988HXHBTZZEFACejzJRDe7zMiKviesFKWtq4Q3Bo6VZfPZDWFzbod4Kn7SudVSBKhu5GqMUqBUXFNj5wBLyWuNWe4nqN`
-
-To support me (Zennox) please send Solana to this address
-`5Ci84K1CJRVyWJHkxhsNuscBsXQZN7zG5AuVqWYYnjtf`
