@@ -177,7 +177,8 @@ func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo stri
 	processNewSolDonation = fn
 }
 
-// New getTransactionsForAddresses (fixed tx looping)
+// getTransactionsForAddresses polls for new Solana transactions.
+// It always fetches a small recent page (newest first) and stops
 func getTransactionsForAddresses() {
 	for _, wallet := range solWallets {
 		sameBalance := false
@@ -194,16 +195,10 @@ func getTransactionsForAddresses() {
 		endpoint := rpc.MainNetBeta_RPC
 		client := rpc.New(endpoint)
 
-		// Only fetch signatures newer than the last one we processed for this wallet
-		var before solana.Signature
-		if sig, ok := lastProcessedSig[wallet.Address]; ok {
-			before = sig
-		}
-
+		// Always fetch a small page of the most recent signatures (newest first).
 		limit := 20
 		opts := &rpc.GetSignaturesForAddressOpts{
-			Limit:  &limit,
-			Before: before,
+			Limit: &limit,
 		}
 
 		out, err := client.GetSignaturesForAddressWithOpts(
@@ -212,17 +207,18 @@ func getTransactionsForAddresses() {
 			opts,
 		)
 		if err != nil {
-			fmt.Printf("❌ RPC GetSignatures error: %v\n", err)
+			fmt.Printf("RPC GetSignatures error: %v\n", err)
 			time.Sleep(10 * time.Second)
 			continue
 		}
 
 		for _, sigInfo := range out {
-			// Advance the cursor so we don't re-fetch this signature next loop
-			lastProcessedSig[wallet.Address] = sigInfo.Signature
-            persistLastSig(wallet.Address, sigInfo.Signature)
-
 			sigStr := sigInfo.Signature.String()
+
+			// If we have already processed this signature, stop.
+			if processedSignatures[sigStr] {
+				break
+			}
 
 			tAmount, newTrans := getTransactionAmount(sigStr, wallet.Address)
 			if newTrans {
@@ -231,14 +227,19 @@ func getTransactionsForAddresses() {
 				fmt.Printf("SOL: No new tx for %s...\n", wallet.Address[:7])
 			}
 
+			// Update cursor (test keeping lastProcessedSig for the JSON file)
+			lastProcessedSig[wallet.Address] = sigInfo.Signature
+			persistLastSig(wallet.Address, sigInfo.Signature)
+
 			time.Sleep(6 * time.Second)
 		}
 
 		time.Sleep(5 * time.Second)
 	}
 }
+// End of getTransactionsForAddresses
 
-
+/*  PRE EDIT FUNCTION
 // addSolanaTransaction is called when a new incoming SOL tx is detected
 func addSolanaTransaction(addr, sig string, amount int64) {
 	// === DEDUPLICATION FIX ===
@@ -271,7 +272,47 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 	transactions = append(transactions, transaction)
 }
 // End of addSolanaTransaction
+*/
 
+// POST EDIT FUNCTION
+// addSolanaTransaction is called when a new incoming SOL tx is detected.
+// It extracts the memo and triggers the alert/TTS callback.
+func addSolanaTransaction(addr, sig string, amount int64) {
+	// === DEDUPLICATION FIX ===
+	if processedSignatures[sig] {
+		return // already processed this tx
+	}
+	processedSignatures[sig] = true
+
+	transaction := Transaction{
+		Address:   addr,
+		Signature: sig,
+		Amount:    amount,
+	}
+
+	if amount <= 50000 { // prevent dust/spam
+		return
+	}
+
+	// Fetch full tx (jsonParsed) so ExtractSolanaMemo has good data
+	fullTx := fetchFullTransaction(sig)
+	memo := ExtractSolanaMemo(fullTx)
+	if memo == "" {
+		memo = "Anonymous Donation"
+	}
+
+	// === This is the line you want to see ===
+	fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",
+		float64(amount)/1e9, memo)
+
+	// Trigger alert + TTS
+	if processNewSolDonation != nil {
+		processNewSolDonation(addr, sig, amount, memo)
+	}
+
+	transactions = append(transactions, transaction)
+}
+// End of addSolanaTransaction
 
 func CreatePendingSolDono(name string, message string, mediaURL string, amountNeeded float64) SuperChat {
   pendingDono := SuperChat{
@@ -401,8 +442,9 @@ func getTransactionAmount(sig, addr string) (int64, bool) {
 		return 0, false
 	}
 
-	fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
-		addr[:5], amountSent, float64(amountSent)/1e9)
+    // clean up duplicate messages by commenting this line
+	//fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
+  	//	addr[:5], amountSent, float64(amountSent)/1e9)
 
 	return amountSent, true
 }
