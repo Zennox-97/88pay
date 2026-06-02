@@ -301,7 +301,12 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 		memo = "Anonymous Donation"
 	}
 
-	// === This is the line you want to see ===
+    // Silence duplicate calls for donation alerts
+    if processedSignatures[sig] {
+        return
+    }
+
+	// Successful donation message console log
 	fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",
 		float64(amount)/1e9, memo)
 
@@ -421,7 +426,6 @@ func getTransactionAmount(sig, addr string) (int64, bool) {
 	if len(tr.Result.Meta.PreBalances) == 0 ||
 		len(tr.Result.Meta.PostBalances) == 0 ||
 		len(tr.Result.Transaction.Message.AccountKeys) == 0 {
-		fmt.Printf("⚠️ [SOL] Skipping malformed tx %s (empty balances or keys)\n", sig[:12]+"...")
 		return 0, false
 	}
 
@@ -467,8 +471,8 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
   fmt.Println("sig:", sig[:7])
 }
 
-// fetchFullTransaction retrieves the complete Solana transaction from RPC
-// fetchFullTransaction gets the full parsed tx with better retries + exponential backoff
+// fetchFullTransaction retrieves the full parsed transaction (jsonParsed).
+// Only warns on later attempts to keep the console readable.
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
 
@@ -497,7 +501,6 @@ func fetchFullTransaction(signature string) interface{} {
 		client := &http.Client{Timeout: 15 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
-			fmt.Printf("⚠️ [RPC] Network error for %s (attempt %d)\n", signature[:12]+"...", attempt)
 			time.Sleep(time.Duration(attempt*400) * time.Millisecond)
 			continue
 		}
@@ -514,14 +517,16 @@ func fetchFullTransaction(signature string) interface{} {
 			return result
 		}
 
-		fmt.Printf("⚠️ [RPC] Transaction %s not yet available (result=null) — attempt %d\n", signature[:12]+"...", attempt)
-		time.Sleep(time.Duration(attempt*700) * time.Millisecond) // more patient backoff
+		if attempt >= 3 {
+			fmt.Printf("⚠️ [RPC] Transaction %s not yet available (result=null) — attempt %d\n",
+				signature[:12]+"...", attempt)
+		}
+		time.Sleep(time.Duration(attempt*650) * time.Millisecond)
 	}
 
 	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 10 attempts\n", signature[:12]+"...")
 	return nil
-}
-// End of fetchFUllTransaction
+}// End of fetchFUllTransaction
 
 // ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
 // Handles Phantom, Ledger, CLI, etc. via instructions + logMessages fallback.
