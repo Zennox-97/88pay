@@ -494,8 +494,8 @@ func setupRoutes() {
 		{"/usermanager", allUsersHandler},
 		{"/refresh", refreshHandler},
 		{"/testdonation", testDonoHandler},
-		{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
-		{"/generatecodes", generateCodesHandler},
+	//	{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
+	//	{"/generatecodes", generateCodesHandler},
 		{"/cryptosettings", cryptoSettingsHandler},
 	}
 
@@ -701,6 +701,7 @@ func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+/* Obsolete, commenting and imminent deletion
 func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
 		generateMoreInviteCodes(5)
@@ -712,7 +713,9 @@ func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+*/
 
+/*
 func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if checkLoggedInAdmin(w, r) {
@@ -725,6 +728,8 @@ func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+*/
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
@@ -974,11 +979,8 @@ func getUserLinks(user utils.User) ([]utils.Link, error) {
 	if user.Links == "" {
 		// Insert default links for the user
 		defaultLinks := []utils.Link{
-			{URL: "https://powerchat.live/paultown?tab=donation", Description: "Powerchat"},
-			{URL: "https://cozy.tv/paultown", Description: "cozy.tv/paultown"},
-			{URL: "http://twitter.paul.town/", Description: "Twitter"},
-			{URL: "https://t.me/paultownreal", Description: "Telegram"},
-			{URL: "http://notes.paul.town/", Description: "notes.paul.town"},
+			{URL: "https://88streams.com/", Description: "88 Streams"},
+			{URL: "https://t.me/zenny97", Description: "Zennox's Telegram"},
 		}
 
 		jsonLinks, err := json.Marshal(defaultLinks)
@@ -2357,8 +2359,6 @@ func createDatabaseIfNotExists(db *sql.DB) error {
 	}
 
 	createAdminUser()
-	createNewUser("paul", "hunter")
-
 	return nil
 }
 
