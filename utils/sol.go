@@ -88,6 +88,12 @@ var firstRun bool = true
 // Mainnet
 var solClient = client.NewClient("https://api.mainnet-beta.solana.com")
 
+// Prevent re-processing the same transaction on restart or duplicate polls
+var processedSignatures = make(map[string]bool)
+
+
+
+
 func StartMonitoringSolana() {
   for {
     getTransactionsForAddresses()
@@ -232,6 +238,12 @@ func addSolanaTransactionStart(addr, sig string) {
 
 // addSolanaTransaction is called when a new incoming SOL tx is detected
 func addSolanaTransaction(addr, sig string, amount int64) {
+	// === DEDUPLICATION FIX ===
+	if processedSignatures[sig] {
+		return // already processed this tx
+	}
+	processedSignatures[sig] = true
+
 	transaction := Transaction{
 		Address:   addr,
 		Signature: sig,
@@ -248,7 +260,7 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 	fullTx := fetchFullTransaction(sig)
 	memo := ExtractSolanaMemo(fullTx)
 
-	// NEW: Call exported helper in main package via a global callback (best pattern here)
+	// Trigger alert with memo
 	if processNewSolDonation != nil {
 		processNewSolDonation(addr, sig, amount, memo)
 	}
@@ -461,9 +473,7 @@ func fetchFullTransaction(signature string) interface{} {
 }
 // End of fetchFUllTransaction
 
-// ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
-// Handles standard Memo program, legacy Memo program, and aggressive logMessages fallback
-// (covers Phantom, Ledger Live, Solana CLI, etc.).
+/** DEBUG VERSION OF ExtractSolanaMemo 
 func ExtractSolanaMemo(tx interface{}) string {
 	if tx == nil {
 		fmt.Println("❌ [MEMO] tx was nil")
@@ -558,6 +568,83 @@ func ExtractSolanaMemo(tx interface{}) string {
 
 	return memo
 }
+
+END OF DEBUG ExtractSolanaMemo**/
+
+// ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
+// Handles Phantom, Ledger, CLI, etc. via instructions + logMessages fallback.
+func ExtractSolanaMemo(tx interface{}) string {
+	if tx == nil {
+		return ""
+	}
+
+	memo := ""
+
+	if txMap, ok := tx.(map[string]interface{}); ok {
+		// Primary path: transaction.message.instructions
+		var instructions []interface{}
+		if transaction, ok := txMap["transaction"].(map[string]interface{}); ok {
+			if message, ok := transaction["message"].(map[string]interface{}); ok {
+				if insts, ok := message["instructions"].([]interface{}); ok {
+					instructions = insts
+				}
+			}
+		}
+
+		// Scan for Memo program
+		for _, inst := range instructions {
+			if instMap, ok := inst.(map[string]interface{}); ok {
+				programID := ""
+				if pid, ok := instMap["programId"].(string); ok {
+					programID = pid
+				} else if pid, ok := instMap["programID"].(string); ok {
+					programID = pid
+				}
+
+				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") ||
+				   strings.Contains(programID, "Memo1Uh8x") {
+					if data, ok := instMap["data"].(string); ok {
+						decoded, err := base64.StdEncoding.DecodeString(data)
+						if err == nil {
+							memo = string(decoded)
+						} else {
+							memo = data
+						}
+						break
+					}
+				}
+			}
+		}
+
+		// Fallback for Ledger / wallets that only log the memo
+		if memo == "" {
+			if meta, ok := txMap["meta"].(map[string]interface{}); ok {
+				if logMessages, ok := meta["logMessages"].([]interface{}); ok {
+					for _, logEntry := range logMessages {
+						if logStr, ok := logEntry.(string); ok {
+							if strings.Contains(logStr, "Memo (len") {
+								if idx := strings.LastIndex(logStr, `"`); idx > 0 {
+									start := strings.LastIndex(logStr[:idx], `"`)
+									if start != -1 {
+										memo = strings.TrimSpace(logStr[start+1 : idx])
+										break
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	memo = strings.TrimSpace(memo)
+	if len(memo) > 280 {
+		memo = memo[:280]
+	}
+	return memo
+}
+// End of ExtractSolanaMemo
 
 // Helper to print map keys for debugging (add this too)
 func getMapKeys(m map[string]interface{}) []string {

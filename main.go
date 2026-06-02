@@ -1,5 +1,9 @@
 package main
 
+// Copyright (C) 2025-2026 Zennox-97
+// This file is part of 88pay, licensed under GPLv3.
+// See LICENSE for details.
+
 import (
 	"bytes"
 	"database/sql"
@@ -47,7 +51,8 @@ var MessageMaxChar int = 250
 var NameMaxChar int = 25
 var starting_port int = 28088
 
-var host_url string = "https://ferret.cash/"
+// Default page when loading "127.0.0.1:8900"
+var host_url string = "http://127.0.0.1:8900/login"
 
 var addressSliceSolana []utils.AddressSolana
 
@@ -472,8 +477,8 @@ func setupRoutes() {
 		{"/check_donation_status/", checkDonationStatusHandler},
 		{"/donations", donationsHandler},
 		{"/", indexHandler},
-		{"/termsofservice", tosHandler},
-		{"/pay", paymentHandler},
+	//	{"/termsofservice", tosHandler},
+	//	{"/pay", paymentHandler},
 		{"/alert", alertOBSHandler},
 		{"/viewdonos", viewDonosHandler},
 		{"/replaydono", replayDonoHandler},
@@ -485,16 +490,16 @@ func setupRoutes() {
 		{"/logout", logoutHandler},
 		{"/changepassword", changePasswordHandler},
 		{"/changeuser", changeUserHandler},
-		{"/register", registerUserHandler},
-		{"/newaccount", newAccountHandler},
+	//	{"/register", registerUserHandler},
+	//	{"/newaccount", newAccountHandler},
 		{"/overflow", overflowHandler},
-		{"/billing", accountBillingHandler},
+	//	{"/billing", accountBillingHandler},
 		{"/changeusermonero", changeUserMoneroHandler},
 		{"/usermanager", allUsersHandler},
 		{"/refresh", refreshHandler},
 		{"/testdonation", testDonoHandler},
-		{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
-		{"/generatecodes", generateCodesHandler},
+	//	{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
+	//	{"/generatecodes", generateCodesHandler},
 		{"/cryptosettings", cryptoSettingsHandler},
 	}
 
@@ -700,6 +705,7 @@ func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+/* Obsolete, commenting and imminent deletion
 func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
 		generateMoreInviteCodes(5)
@@ -711,7 +717,9 @@ func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+*/
 
+/*
 func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 
 	if checkLoggedInAdmin(w, r) {
@@ -724,6 +732,8 @@ func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+*/
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
@@ -973,11 +983,8 @@ func getUserLinks(user utils.User) ([]utils.Link, error) {
 	if user.Links == "" {
 		// Insert default links for the user
 		defaultLinks := []utils.Link{
-			{URL: "https://powerchat.live/paultown?tab=donation", Description: "Powerchat"},
-			{URL: "https://cozy.tv/paultown", Description: "cozy.tv/paultown"},
-			{URL: "http://twitter.paul.town/", Description: "Twitter"},
-			{URL: "https://t.me/paultownreal", Description: "Telegram"},
-			{URL: "http://notes.paul.town/", Description: "notes.paul.town"},
+			{URL: "https://88streams.com/", Description: "88 Streams"},
+			{URL: "https://t.me/zenny97", Description: "Zennox's Telegram"},
 		}
 
 		jsonLinks, err := json.Marshal(defaultLinks)
@@ -2356,8 +2363,6 @@ func createDatabaseIfNotExists(db *sql.DB) error {
 	}
 
 	createAdminUser()
-	createNewUser("paul", "hunter")
-
 	return nil
 }
 
@@ -3820,24 +3825,31 @@ func getIPAddress(r *http.Request) string {
 	return ip
 }
 
-func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
-	err := indexTemplate.Execute(w, nil)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
+    func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
+        
+        err := indexTemplate.Execute(w, nil)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return
+        }
+    }
 
-func indexHandler(w http.ResponseWriter, r *http.Request) {
+    func indexHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Ignore requests for the favicon
-	if r.URL.Path == "/favicon.ico" {
-		return
-	}
-	// Get the username from the URL path
-	username := r.URL.Path[1:]
+        // Ignore requests for the favicon
+        if r.URL.Path == "/favicon.ico" {
+            return
+        }
+        // Get the username from the URL path
+        username := r.URL.Path[1:]
 
-	username = strings.ToLower(username)
+        // Set webserver default page
+        if r.URL.Path == "/" || r.URL.Path == "" {
+            http.Redirect(w, r, "/user", http.StatusFound)
+            return
+        }
+
+    username = strings.ToLower(username)
 	user_, valid := getUserByUsernameCached(username)
 	// Calculate all minimum donations
 	user := globalUsers[user_.UserID]
