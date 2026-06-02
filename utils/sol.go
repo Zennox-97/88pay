@@ -149,42 +149,6 @@ func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo stri
 	processNewSolDonation = fn
 }
 
-/* pre-loopfix getTransactionsForAddresses
-func getTransactionsForAddresses() {
-  for _, wallet := range solWallets {
-    sameBalance := false
-    wallet, sameBalance = checkSameBalanceSol(wallet)
-
-    if sameBalance {
-      fmt.Println("Sol wallet the same balance, not getting new txs")
-      time.Sleep(10 * time.Second)
-    } else {
-      fmt.Println("Sol wallet not the same balance, getting new txs")
-      endpoint := rpc.MainNetBeta_RPC
-      client := rpc.New(endpoint)
-      out, err := client.GetSignaturesForAddress(
-        context.TODO(),
-        solana.MustPublicKeyFromBase58(wallet.Address),
-      )
-      if err != nil {
-        panic(err)
-      }
-      for _, sig := range out {
-        tAmount, newTrans := getTransactionAmount(sig.Signature.String(), wallet.Address)
-        if newTrans {
-          addSolanaTransaction(wallet.Address, sig.Signature.String(), tAmount)
-        } else {
-          fmt.Println("SOL: No new", wallet.Address[:7]+"... txs.")
-        }
-
-        time.Sleep(6 * time.Second)
-      }
-      time.Sleep(5 * time.Second)
-    }
-  }
-
-} */
-
 // New getTransactionsForAddresses (fixed tx looping)
 func getTransactionsForAddresses() {
 	for _, wallet := range solWallets {
@@ -202,16 +166,16 @@ func getTransactionsForAddresses() {
 		endpoint := rpc.MainNetBeta_RPC
 		client := rpc.New(endpoint)
 
-		// NEW: Only fetch signatures newer than the last one we processed
+		// Only fetch signatures newer than the last one we processed for this wallet
 		var before solana.Signature
 		if sig, ok := lastProcessedSig[wallet.Address]; ok {
 			before = sig
 		}
 
-		limit := 20 // small batch = plenty for real-time watching
+		limit := 20
 		opts := &rpc.GetSignaturesForAddressOpts{
-			Limit:  &limit, // must be pointer
-			Before: before, // solana.Signature type (not string)
+			Limit:  &limit,
+			Before: before,
 		}
 
 		out, err := client.GetSignaturesForAddressWithOpts(
@@ -226,7 +190,7 @@ func getTransactionsForAddresses() {
 		}
 
 		for _, sigInfo := range out {
-			// Update our cursor immediately (this is the "remember where we left off")
+			// Advance the cursor so we don't re-fetch this signature next loop
 			lastProcessedSig[wallet.Address] = sigInfo.Signature
 
 			sigStr := sigInfo.Signature.String()
@@ -238,13 +202,12 @@ func getTransactionsForAddresses() {
 				fmt.Printf("SOL: No new tx for %s...\n", wallet.Address[:7])
 			}
 
-			time.Sleep(6 * time.Second) // be nice to the RPC
+			time.Sleep(6 * time.Second)
 		}
 
 		time.Sleep(5 * time.Second)
 	}
 }
-
 
 
 // addSolanaTransaction is called when a new incoming SOL tx is detected
@@ -331,78 +294,91 @@ func getSOLBalance(address string) (float64, error) {
   return float64(balance) / 1e9, nil
 }
 
+// getTransactionAmount safely parses a Solana transaction and extracts amount + memo
 func getTransactionAmount(sig, addr string) (int64, bool) {
-  defer func() {
-    if r := recover(); r != nil {
-      fmt.Println("Recovered from panic:", r)
-      fmt.Println("Sleeping 10 seconds.")
-      time.Sleep(10 * time.Second)
-    }
-  }()
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("Recovered from panic in getTransactionAmount on %s: %v\n", sig[:12]+"...", r)
+			time.Sleep(5 * time.Second)
+		}
+	}()
 
-  if !containsTransaction(sig) {
-    url := "https://api.mainnet-beta.solana.com"
-    requestBody := fmt.Sprintf(`
-  {
-    "jsonrpc": "2.0",
-    "id": 1,
-    "method": "getTransaction",
-    "params": [
-      "%s",
-      "json"
-    ]
-  }`, sig)
+	if containsTransaction(sig) {
+		return 0, false
+	}
 
-    // Create an HTTP POST request with the request body
-    req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
-    if err != nil {
-      fmt.Println("Error creating HTTP request:", err)
-      return 0, false
-    }
+	url := "https://api.mainnet-beta.solana.com"
+	requestBody := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "getTransaction",
+		"params": [
+			"%s",
+			"json"
+		]
+	}`, sig)
 
-    // Set the request header
-    req.Header.Set("Content-Type", "application/json")
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+	if err != nil {
+		fmt.Println("Error creating HTTP request:", err)
+		return 0, false
+	}
+	req.Header.Set("Content-Type", "application/json")
 
-    // Send the HTTP request
-    client := &http.Client{}
-    resp, err := client.Do(req)
-    if err != nil {
-      fmt.Println("Error sending HTTP request:", err)
-      return 0, false
-    }
-    defer resp.Body.Close()
+	client := &http.Client{Timeout: 15 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Println("Error sending HTTP request:", err)
+		return 0, false
+	}
+	defer resp.Body.Close()
 
-    // Read the response body
-    var responseBody bytes.Buffer
-    _, err = responseBody.ReadFrom(resp.Body)
-    if err != nil {
-      fmt.Println("Error reading response body:", err)
-      return 0, false
-    }
+	var responseBody bytes.Buffer
+	_, err = responseBody.ReadFrom(resp.Body)
+	if err != nil {
+		fmt.Println("Error reading response body:", err)
+		return 0, false
+	}
 
-    // Parse the response into a TransactionResponse struct
-    var tr TransactionResponse
-    err = json.Unmarshal(responseBody.Bytes(), &tr)
-    if err != nil {
-      fmt.Println("Error parsing JSON:", err)
-      return 0, false
-    }
+	var tr TransactionResponse
+	err = json.Unmarshal(responseBody.Bytes(), &tr)
+	if err != nil {
+		fmt.Printf("❌ JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
+		return 0, false
+	}
 
-    initialAmount := tr.Result.Meta.PreBalances[0]
-    endingAmount := tr.Result.Meta.PostBalances[0]
-    fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
-    fee := tr.Result.Meta.Fee
-    endingPlusFee := endingAmount + fee
-    amountSent := initialAmount - endingPlusFee
-    if fromAddr == addr {
-      amountSent *= -1
-    }
+	// === SAFE INDEX CHECKS (prevents the panic) ===
+	if len(tr.Result.Meta.PreBalances) == 0 ||
+		len(tr.Result.Meta.PostBalances) == 0 ||
+		len(tr.Result.Transaction.Message.AccountKeys) == 0 {
+		fmt.Printf("⚠️ [SOL] Skipping malformed tx %s (empty balances or keys)\n", sig[:12]+"...")
+		return 0, false
+	}
 
-    //printSolTx(fromAddr, addr, tr.Result.Transaction.Message.AccountKeys[1], amountSent, sig)
-    return amountSent, true
-  }
-  return 0, false
+	initialAmount := tr.Result.Meta.PreBalances[0]
+	endingAmount := tr.Result.Meta.PostBalances[0]
+	fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
+	fee := tr.Result.Meta.Fee
+
+	endingPlusFee := endingAmount + fee
+	amountSent := initialAmount - endingPlusFee
+
+	if fromAddr == addr {
+		amountSent *= -1
+	}
+
+	// Only count positive incoming amounts as potential donations
+	if amountSent <= 0 {
+		return 0, false
+	}
+
+	fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
+		addr[:5], amountSent, float64(amountSent)/1e9)
+
+	return amountSent, true
 }
+// getTransactionAmount END
+
 
 func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string) {
 
@@ -421,11 +397,11 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
 }
 
 // fetchFullTransaction retrieves the complete Solana transaction from RPC
-// (with proper Content-Type header + retry logic)
+// fetchFullTransaction gets the full parsed tx with better retries + exponential backoff
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
 
-	for attempt := 1; attempt <= 8; attempt++ {  // increased from 3
+	for attempt := 1; attempt <= 10; attempt++ {
 		requestBody := fmt.Sprintf(`{
 			"jsonrpc": "2.0",
 			"id": 1,
@@ -442,7 +418,7 @@ func fetchFullTransaction(signature string) interface{} {
 
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
 		if err != nil {
-			time.Sleep(time.Duration(attempt*200) * time.Millisecond)
+			time.Sleep(time.Duration(attempt*150) * time.Millisecond)
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -468,10 +444,10 @@ func fetchFullTransaction(signature string) interface{} {
 		}
 
 		fmt.Printf("⚠️ [RPC] Transaction %s not yet available (result=null) — attempt %d\n", signature[:12]+"...", attempt)
-		time.Sleep(time.Duration(attempt*600) * time.Millisecond) // exponential backoff
+		time.Sleep(time.Duration(attempt*700) * time.Millisecond) // more patient backoff
 	}
 
-	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 8 attempts\n", signature[:12]+"...")
+	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 10 attempts\n", signature[:12]+"...")
 	return nil
 }
 // End of fetchFUllTransaction
