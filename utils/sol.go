@@ -239,48 +239,11 @@ func getTransactionsForAddresses() {
 }
 // End of getTransactionsForAddresses
 
-/*  PRE EDIT FUNCTION
-// addSolanaTransaction is called when a new incoming SOL tx is detected
-func addSolanaTransaction(addr, sig string, amount int64) {
-	// === DEDUPLICATION FIX ===
-	if processedSignatures[sig] {
-		return // already processed this tx
-	}
-	processedSignatures[sig] = true
-
-	transaction := Transaction{
-		Address:   addr,
-		Signature: sig,
-		Amount:    amount,
-	}
-
-	if amount <= 50000 { // prevent dust/spam
-		return
-	}
-
-	//fmt.Printf("SOL: %s... Received: %d lamports (%.6f SOL)\n", addr[:5], amount, float64(amount)/1e9)
-
-	// Fetch memo
-	fullTx := fetchFullTransaction(sig)
-	memo := ExtractSolanaMemo(fullTx)
-
-	// Trigger alert with memo
-	if processNewSolDonation != nil {
-		processNewSolDonation(addr, sig, amount, memo)
-	}
-
-	transactions = append(transactions, transaction)
-}
-// End of addSolanaTransaction
-*/
-
-// POST EDIT FUNCTION
 // addSolanaTransaction is called when a new incoming SOL tx is detected.
-// It extracts the memo and triggers the alert/TTS callback.
+// It extracts the memo (with fallback) and triggers the alert/TTS.
 func addSolanaTransaction(addr, sig string, amount int64) {
-	// === DEDUPLICATION FIX ===
 	if processedSignatures[sig] {
-		return // already processed this tx
+		return
 	}
 	processedSignatures[sig] = true
 
@@ -290,27 +253,27 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 		Amount:    amount,
 	}
 
-	if amount <= 50000 { // prevent dust/spam
+	if amount <= 50000 {
 		return
 	}
 
-	// Fetch full tx (jsonParsed) so ExtractSolanaMemo has good data
+	// First try jsonParsed (faster for most cases)
 	fullTx := fetchFullTransaction(sig)
 	memo := ExtractSolanaMemo(fullTx)
+
+	// Fallback to plain json if we didn't get a memo (jsonParsed shape sometimes hides it)
+	if memo == "" {
+		plainTx := fetchPlainTransaction(sig) // helper below
+		memo = ExtractSolanaMemo(plainTx)
+	}
+
 	if memo == "" {
 		memo = "Anonymous Donation"
 	}
 
-    // Silence duplicate calls for donation alerts
-    if processedSignatures[sig] {
-        return
-    }
-
-	// Successful donation message console log
 	fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",
 		float64(amount)/1e9, memo)
 
-	// Trigger alert + TTS
 	if processNewSolDonation != nil {
 		processNewSolDonation(addr, sig, amount, memo)
 	}
@@ -471,12 +434,12 @@ func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string
   fmt.Println("sig:", sig[:7])
 }
 
-// fetchFullTransaction retrieves the full parsed transaction (jsonParsed).
-// Only warns on later attempts to keep the console readable.
+// fetchFullTransaction gets the full parsed tx.
+// It stays completely silent during normal retries and only logs on final success or total failure.
 func fetchFullTransaction(signature string) interface{} {
 	url := "https://api.mainnet-beta.solana.com"
 
-	for attempt := 1; attempt <= 10; attempt++ {
+	for attempt := 1; attempt <= 12; attempt++ {
 		requestBody := fmt.Sprintf(`{
 			"jsonrpc": "2.0",
 			"id": 1,
@@ -493,7 +456,7 @@ func fetchFullTransaction(signature string) interface{} {
 
 		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
 		if err != nil {
-			time.Sleep(time.Duration(attempt*150) * time.Millisecond)
+			time.Sleep(time.Duration(attempt*200) * time.Millisecond)
 			continue
 		}
 		req.Header.Set("Content-Type", "application/json")
@@ -501,14 +464,14 @@ func fetchFullTransaction(signature string) interface{} {
 		client := &http.Client{Timeout: 15 * time.Second}
 		resp, err := client.Do(req)
 		if err != nil {
-			time.Sleep(time.Duration(attempt*400) * time.Millisecond)
+			time.Sleep(time.Duration(attempt*500) * time.Millisecond)
 			continue
 		}
 		defer resp.Body.Close()
 
 		var txResponse map[string]interface{}
 		if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
-			time.Sleep(time.Duration(attempt*300) * time.Millisecond)
+			time.Sleep(time.Duration(attempt*400) * time.Millisecond)
 			continue
 		}
 
@@ -517,16 +480,44 @@ func fetchFullTransaction(signature string) interface{} {
 			return result
 		}
 
-		if attempt >= 3 {
-			fmt.Printf("⚠️ [RPC] Transaction %s not yet available (result=null) — attempt %d\n",
-				signature[:12]+"...", attempt)
-		}
-		time.Sleep(time.Duration(attempt*650) * time.Millisecond)
+		// Completely silent during normal "not yet available" retries
+		time.Sleep(time.Duration(attempt*800) * time.Millisecond)
 	}
 
-	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 10 attempts\n", signature[:12]+"...")
+	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 12 attempts\n", signature[:12]+"...")
 	return nil
-}// End of fetchFUllTransaction
+}
+// End of fetchFUllTransaction
+
+
+// fetchPlainTransaction is a lightweight fallback used only when we need the original base64 memo shape.
+func fetchPlainTransaction(signature string) interface{} {
+	url := "https://api.mainnet-beta.solana.com"
+	requestBody := fmt.Sprintf(`{
+		"jsonrpc": "2.0",
+		"id": 1,
+		"method": "getTransaction",
+		"params": ["%s", "json"]
+	}`, signature)
+
+	req, _ := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 12 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil
+	}
+	defer resp.Body.Close()
+
+	var txResponse map[string]interface{}
+	json.NewDecoder(resp.Body).Decode(&txResponse)
+
+	if result, ok := txResponse["result"]; ok && result != nil {
+		return result
+	}
+	return nil
+}
 
 // ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
 // Handles Phantom, Ledger, CLI, etc. via instructions + logMessages fallback.
