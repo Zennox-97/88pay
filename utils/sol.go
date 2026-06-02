@@ -91,7 +91,8 @@ var solClient = client.NewClient("https://api.mainnet-beta.solana.com")
 // Prevent re-processing the same transaction on restart or duplicate polls
 var processedSignatures = make(map[string]bool)
 
-
+// Track tx's already processed per wallet address | Stop looping through every tx on server start
+var lastProcessedSig = make(map[string]solana.Signature)
 
 
 func StartMonitoringSolana() {
@@ -99,29 +100,6 @@ func StartMonitoringSolana() {
     getTransactionsForAddresses()
   }
 }
-/* Old CheckTransactionSolana function
-func CheckTransactionSolana(amt string, addr string, max_depth int) bool {
-  decAmountReceived, _ := decimal.NewFromString(amt)
-  decMultiplier := decimal.NewFromFloat(1000000000)
-  result := decAmountReceived.Mul(decMultiplier)
-  amountSent := result.IntPart()
-
-  fmt.Println("Checking", addr, "for", amountSent, "lamport")
-
-  startIndex := len(transactions) - max_depth // Calculate max depth of transactions to search
-  if startIndex < 0 {
-    startIndex = 0 // Make sure start index is not negative
-  }
-
-  for i := startIndex; i < len(transactions); i++ {
-    transaction := transactions[i]
-    if transaction.Address == addr && transaction.Amount == amountSent {
-      return true
-    }
-  }
-  return false
-}
-*/
 
 // New CheckTransactionSolana
 
@@ -171,6 +149,7 @@ func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo stri
 	processNewSolDonation = fn
 }
 
+/* pre-loopfix getTransactionsForAddresses
 func getTransactionsForAddresses() {
   for _, wallet := range solWallets {
     sameBalance := false
@@ -204,37 +183,69 @@ func getTransactionsForAddresses() {
     }
   }
 
+} */
+
+// New getTransactionsForAddresses (fixed tx looping)
+func getTransactionsForAddresses() {
+	for _, wallet := range solWallets {
+		sameBalance := false
+		wallet, sameBalance = checkSameBalanceSol(wallet)
+
+		if sameBalance {
+			fmt.Println("Sol wallet the same balance, not getting new txs")
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		fmt.Println("Sol wallet changed balance → fetching NEW txs only")
+
+		endpoint := rpc.MainNetBeta_RPC
+		client := rpc.New(endpoint)
+
+		// NEW: Only fetch signatures newer than the last one we processed
+		var before solana.Signature
+		if sig, ok := lastProcessedSig[wallet.Address]; ok {
+			before = sig
+		}
+
+		limit := 20 // small batch = plenty for real-time watching
+		opts := &rpc.GetSignaturesForAddressOpts{
+			Limit:  &limit, // must be pointer
+			Before: before, // solana.Signature type (not string)
+		}
+
+		out, err := client.GetSignaturesForAddressWithOpts(
+			context.TODO(),
+			solana.MustPublicKeyFromBase58(wallet.Address),
+			opts,
+		)
+		if err != nil {
+			fmt.Printf("❌ RPC GetSignatures error: %v\n", err)
+			time.Sleep(10 * time.Second)
+			continue
+		}
+
+		for _, sigInfo := range out {
+			// Update our cursor immediately (this is the "remember where we left off")
+			lastProcessedSig[wallet.Address] = sigInfo.Signature
+
+			sigStr := sigInfo.Signature.String()
+
+			tAmount, newTrans := getTransactionAmount(sigStr, wallet.Address)
+			if newTrans {
+				addSolanaTransaction(wallet.Address, sigStr, tAmount)
+			} else {
+				fmt.Printf("SOL: No new tx for %s...\n", wallet.Address[:7])
+			}
+
+			time.Sleep(6 * time.Second) // be nice to the RPC
+		}
+
+		time.Sleep(5 * time.Second)
+	}
 }
 
-func getTransactionsForAddressesFirst() {
-  for _, wallet := range solWallets {
-    endpoint := rpc.MainNetBeta_RPC
-    client := rpc.New(endpoint)
-    out, err := client.GetSignaturesForAddress(
-      context.TODO(),
-      solana.MustPublicKeyFromBase58(wallet.Address),
-    )
-    if err != nil {
-      panic(err)
-    }
 
-    for _, sig := range out {
-      addSolanaTransactionStart(wallet.Address, sig.Signature.String())
-    }
-
-    time.Sleep(5 * time.Second)
-  }
-
-}
-
-func addSolanaTransactionStart(addr, sig string) {
-  // Create a new transaction object
-  transaction := Transaction{
-    Address:   addr,
-    Signature: sig,
-  }
-  transactions = append(transactions, transaction)
-}
 
 // addSolanaTransaction is called when a new incoming SOL tx is detected
 func addSolanaTransaction(addr, sig string, amount int64) {
@@ -472,104 +483,6 @@ func fetchFullTransaction(signature string) interface{} {
 	return nil
 }
 // End of fetchFUllTransaction
-
-/** DEBUG VERSION OF ExtractSolanaMemo 
-func ExtractSolanaMemo(tx interface{}) string {
-	if tx == nil {
-		fmt.Println("❌ [MEMO] tx was nil")
-		return ""
-	}
-
-	fmt.Printf("🔍 [MEMO] Received tx type: %T\n", tx)
-
-	memo := ""
-
-	if txMap, ok := tx.(map[string]interface{}); ok {
-		// Primary path: transaction.message.instructions (most common)
-		var instructions []interface{}
-		if transaction, ok := txMap["transaction"].(map[string]interface{}); ok {
-			if message, ok := transaction["message"].(map[string]interface{}); ok {
-				if insts, ok := message["instructions"].([]interface{}); ok {
-					instructions = insts
-					fmt.Printf("🔍 [MEMO] Found %d instructions in transaction.message\n", len(instructions))
-				}
-			}
-		}
-
-		// Scan instructions for both Memo programs
-		for i, inst := range instructions {
-			if instMap, ok := inst.(map[string]interface{}); ok {
-				programID := ""
-				if pid, ok := instMap["programId"].(string); ok {
-					programID = pid
-				} else if pid, ok := instMap["programID"].(string); ok {
-					programID = pid
-				}
-
-				fmt.Printf("🔍 [MEMO] Instruction %d program: %s\n", i, programID)
-
-				if strings.Contains(programID, "MemoSq4gqABAXKb96qnH8TysNcWxMyWCqXgDLGmfcHr") ||
-				   strings.Contains(programID, "Memo1Uh8x") { // legacy memo program
-					if data, ok := instMap["data"].(string); ok {
-						decoded, err := base64.StdEncoding.DecodeString(data)
-						if err == nil {
-							memo = string(decoded)
-							fmt.Printf("✅ [MEMO] SUCCESS! Extracted from Memo instruction: %s\n", memo)
-						} else {
-							memo = data
-						}
-						break
-					}
-				}
-			}
-		}
-
-		// Strong fallback for Ledger / other wallets — check logMessages
-		if memo == "" {
-			if meta, ok := txMap["meta"].(map[string]interface{}); ok {
-				if logMessages, ok := meta["logMessages"].([]interface{}); ok {
-					fmt.Printf("🔍 [MEMO] Checking %d logMessages for memo text...\n", len(logMessages))
-					for _, logEntry := range logMessages {
-						if logStr, ok := logEntry.(string); ok {
-							// Common patterns where memo text appears in logs
-							if strings.Contains(logStr, "Memo") || strings.Contains(logStr, "memo") ||
-							   strings.Contains(logStr, "Program MemoSq4gq") || strings.Contains(logStr, "Program Memo1Uh8x") {
-								fmt.Printf("🔍 [MEMO] Potential memo log found: %s\n", logStr)
-								// Try to pull the actual message text
-								if idx := strings.LastIndex(logStr, `"`); idx > 0 {
-									start := strings.LastIndex(logStr[:idx], `"`)
-									if start != -1 && start < idx {
-										possibleMemo := strings.TrimSpace(logStr[start+1 : idx])
-										if len(possibleMemo) > 0 && len(possibleMemo) < 300 {
-											memo = possibleMemo
-											fmt.Printf("✅ [MEMO] SUCCESS! Extracted from logMessages: %s\n", memo)
-											break
-										}
-									}
-								}
-							}
-						}
-					}
-				}
-			}
-		}
-	}
-
-	memo = strings.TrimSpace(memo)
-	if len(memo) > 280 {
-		memo = memo[:280]
-	}
-
-	if memo == "" {
-		fmt.Println("⚠️ [MEMO] No memo found in instructions or logs")
-	} else {
-		fmt.Printf("✅ [MEMO] Final memo for alert/TTS: %s\n", memo)
-	}
-
-	return memo
-}
-
-END OF DEBUG ExtractSolanaMemo**/
 
 // ExtractSolanaMemo extracts the memo from a full Solana getTransaction response.
 // Handles Phantom, Ledger, CLI, etc. via instructions + logMessages fallback.
