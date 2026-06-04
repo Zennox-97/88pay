@@ -1,0 +1,8 @@
+# === Vendored dependencies ===
+# Mark everything under vendor/ as generated code
+vendor/** linguist-generated=true
+vendor/** linguist-vendored=true
+
+# Don't show huge textual diffs for vendored files
+# (makes dependency updates much cleaner in PRs)
+vendor/** -diff
