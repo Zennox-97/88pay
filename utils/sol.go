@@ -17,8 +17,10 @@ import (
     "github.com/shopspring/decimal"
     //"log"
     "os"
+    "github.com/fatih/color"
 )
 
+/** Type / Structure definition zone **/
 type TransactionResponse struct {
   JSONRPC string `json:"jsonrpc"`
   Result  struct {
@@ -77,6 +79,9 @@ type SolWallet struct {
   Amount  float64 `json:"amount"`
 }
 
+
+
+/** Variable definition zone **/
 // processNewSolDonation is a callback set from main.go
 var processNewSolDonation func(addr, sig string, amount int64, memo string)
 
@@ -95,6 +100,17 @@ var processedSignatures = make(map[string]bool)
 // Track tx's already processed per wallet address | Stop looping through every tx on server start
 var lastProcessedSig = make(map[string]solana.Signature)
 
+// Color definitions
+//Green
+var green = color.New(color.FgGreen).SprintFunc()
+//var red = color.New(color.Red).SprintFunc()
+//var blue = color.New(color.Blue).SprintFunc()
+// Keep color functions up with color var's
+func greenText(s string) string{
+    return green(s)
+}
+
+
 // persistLastSig writes the last processed signature for a wallet so we don't
 // re-scan the same history after every server restart.
 func persistLastSig(walletAddr string, sig solana.Signature) {
@@ -104,6 +120,8 @@ func persistLastSig(walletAddr string, sig solana.Signature) {
 	b, _ := json.MarshalIndent(data, "", "  ")
 	_ = os.WriteFile("last_sigs.json", b, 0644)
 }
+
+
 
 // loadLastSigs reads previously saved signatures on startup.
 func loadLastSigs() {
@@ -122,6 +140,7 @@ func loadLastSigs() {
 }
 
 
+
 func StartMonitoringSolana() {
     loadLastSigs()      // Restore cursor position and stop repeating previous tx's
     for {
@@ -129,7 +148,7 @@ func StartMonitoringSolana() {
     }
 }
 
-// New CheckTransactionSolana
+
 
 // CheckTransactionSolana checks for a matching Solana transaction and returns the full tx data if found
 // Returns (found bool, txData interface{})
@@ -190,7 +209,8 @@ func getTransactionsForAddresses() {
 			continue
 		}
 
-		fmt.Println("Sol wallet changed balance → fetching NEW txs only")
+		//fmt.Println("Sol wallet changed balance → fetching NEW txs only")
+        fmt.Println("Waiting for donations...")
 
 		endpoint := rpc.MainNetBeta_RPC
 		client := rpc.New(endpoint)
@@ -268,7 +288,7 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 	}
 
 	// Print success message with memo for nice console output
-    fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",float64(amount)/1e9, memo)
+    fmt.Printf("[DONATION] Amount: %.6f SOL || Message: %s\n",float64(amount)/1e9, memo)
 
 	// Second guard — belt-and-suspenders in case of any re-entrancy or timing
 	if processedSignatures[sig] {
@@ -382,7 +402,7 @@ func checkSameBalanceSol(wallet SolWallet) (SolWallet, bool) {
         var tr TransactionResponse
         err = json.Unmarshal(responseBody.Bytes(), &tr)
         if err != nil {
-            fmt.Printf("❌ JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
+            fmt.Printf("[!ERROR!] JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
             return 0, false
         }
 
@@ -477,7 +497,10 @@ func checkSameBalanceSol(wallet SolWallet) (SolWallet, bool) {
             }
 
             if result, exists := txResponse["result"]; exists && result != nil {
-                fmt.Printf("✅ [RPC] Full tx data received for %s\n", signature[:12]+"...")
+                // Debug line for success
+                //fmt.Printf(" [RPC] Full tx data received for %s\n", signature[:12]+"...")
+                // Production line
+                fmt.Printf("%s %s\n",greenText("[DONATION RECIEVED]"), signature[:24] + "...")
                 return result
             }
 
@@ -485,7 +508,7 @@ func checkSameBalanceSol(wallet SolWallet) (SolWallet, bool) {
 		time.Sleep(time.Duration(attempt*800) * time.Millisecond)
 	}
 
-	fmt.Printf("❌ [RPC] Failed to fetch tx %s after 12 attempts\n", signature[:12]+"...")
+	fmt.Printf("[FAIL][RPC] Failed to fetch tx %s after 12 attempts\n", signature[:12]+"...")
 	return nil
 }
 // End of fetchFUllTransaction
