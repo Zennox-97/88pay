@@ -239,9 +239,12 @@ func getTransactionsForAddresses() {
 }
 // End of getTransactionsForAddresses
 
+
 // addSolanaTransaction is called when a new incoming SOL tx is detected.
-// It extracts the memo (with fallback) and triggers the alert/TTS.
+// It extracts the memo and triggers the alert/TTS callback.
+// The double processedSignatures guard prevents duplicate success logs.
 func addSolanaTransaction(addr, sig string, amount int64) {
+	// First guard — exit immediately if we have already seen this signature
 	if processedSignatures[sig] {
 		return
 	}
@@ -253,27 +256,25 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 		Amount:    amount,
 	}
 
-	if amount <= 50000 {
+	if amount <= 50000 { // prevent dust/spam
 		return
 	}
 
-	// First try jsonParsed (faster for most cases)
+	// Fetch full tx (jsonParsed) so ExtractSolanaMemo has good data
 	fullTx := fetchFullTransaction(sig)
 	memo := ExtractSolanaMemo(fullTx)
-
-	// Fallback to plain json if we didn't get a memo (jsonParsed shape sometimes hides it)
-	if memo == "" {
-		plainTx := fetchPlainTransaction(sig) // helper below
-		memo = ExtractSolanaMemo(plainTx)
-	}
-
 	if memo == "" {
 		memo = "Anonymous Donation"
 	}
 
-	fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",
-		float64(amount)/1e9, memo)
+	// Print success message with memo for nice console output
+    fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n",float64(amount)/1e9, memo)
 
+	// Second guard — belt-and-suspenders in case of any re-entrancy or timing
+	if processedSignatures[sig] {
+		return
+	}
+	// Trigger the actual alert + TTS
 	if processNewSolDonation != nil {
 		processNewSolDonation(addr, sig, amount, memo)
 	}
@@ -283,204 +284,204 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 // End of addSolanaTransaction
 
 func CreatePendingSolDono(name string, message string, mediaURL string, amountNeeded float64) SuperChat {
-  pendingDono := SuperChat{
-    Name:         name,
-    Message:      message,
-    MediaURL:     mediaURL,
-    AmountNeeded: amountNeeded,
-    Completed:    false,
-    CreatedAt:    time.Now().String(),
-    CheckedAt:    time.Now().String(),
-    CryptoCode:   "SOL",
-  }
-  return pendingDono
+    pendingDono := SuperChat{
+        Name:         name,
+        Message:      message,
+        MediaURL:     mediaURL,
+        AmountNeeded: amountNeeded,
+        Completed:    false,
+        CreatedAt:    time.Now().String(),
+        CheckedAt:    time.Now().String(),
+        CryptoCode:   "SOL",
+      }
+      return pendingDono
 }
 
 func containsTransaction(sig string) bool {
-  // searches in reverse order in order to search newest transactions first to avoid needless loops
-  for i := len(transactions) - 1; i >= 0; i-- {
-    if transactions[i].Signature == sig {
-      return true
+    // searches in reverse order in order to search newest transactions first to avoid needless loops
+    for i := len(transactions) - 1; i >= 0; i-- {
+        if transactions[i].Signature == sig {
+          return true
+        }
     }
-  }
-  return false
+    return false
 }
 
 func checkSameBalanceSol(wallet SolWallet) (SolWallet, bool) {
-  amt, _ := getSOLBalance(wallet.Address)
-  if amt == wallet.Amount {
-    return wallet, true
-  } else {
-    wallet.Amount = amt
-    return wallet, false
-  }
+    amt, _ := getSOLBalance(wallet.Address)
+      if amt == wallet.Amount {
+        return wallet, true
+      } else {
+        wallet.Amount = amt
+        return wallet, false
+      }
 
 }
 
-func getSOLBalance(address string) (float64, error) {
+    func getSOLBalance(address string) (float64, error) {
 
-  if address == "" {
-    return 0, nil
-  }
-  balance, err := solClient.GetBalance(
-    context.TODO(), // request context
-    address,        // wallet to fetch balance for
-  )
-  if err != nil {
-    return 0, err
-  }
-  return float64(balance) / 1e9, nil
-}
+      if address == "" {
+        return 0, nil
+      }
+      balance, err := solClient.GetBalance(
+        context.TODO(), // request context
+        address,        // wallet to fetch balance for
+      )
+      if err != nil {
+        return 0, err
+      }
+      return float64(balance) / 1e9, nil
+    }
 
-// getTransactionAmount safely parses a Solana transaction and extracts amount + memo
-func getTransactionAmount(sig, addr string) (int64, bool) {
-	defer func() {
-		if r := recover(); r != nil {
-			fmt.Printf("Recovered from panic in getTransactionAmount on %s: %v\n", sig[:12]+"...", r)
-			time.Sleep(5 * time.Second)
-		}
-	}()
+    // getTransactionAmount safely parses a Solana transaction and extracts amount + memo
+    func getTransactionAmount(sig, addr string) (int64, bool) {
+        defer func() {
+            if r := recover(); r != nil {
+                fmt.Printf("Recovered from panic in getTransactionAmount on %s: %v\n", sig[:12]+"...", r)
+                time.Sleep(5 * time.Second)
+            }
+        }()
 
-	if containsTransaction(sig) {
-		return 0, false
-	}
+        if containsTransaction(sig) {
+            return 0, false
+        }
 
-	url := "https://api.mainnet-beta.solana.com"
-	requestBody := fmt.Sprintf(`{
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "getTransaction",
-		"params": [
-			"%s",
-			"json"
-		]
-	}`, sig)
+        url := "https://api.mainnet-beta.solana.com"
+        requestBody := fmt.Sprintf(`{
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "getTransaction",
+            "params": [
+                "%s",
+                "json"
+            ]
+        }`, sig)
 
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
-	if err != nil {
-		fmt.Println("Error creating HTTP request:", err)
-		return 0, false
-	}
-	req.Header.Set("Content-Type", "application/json")
+        req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+        if err != nil {
+            fmt.Println("Error creating HTTP request:", err)
+            return 0, false
+        }
+        req.Header.Set("Content-Type", "application/json")
 
-	client := &http.Client{Timeout: 15 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("Error sending HTTP request:", err)
-		return 0, false
-	}
-	defer resp.Body.Close()
+        client := &http.Client{Timeout: 15 * time.Second}
+        resp, err := client.Do(req)
+        if err != nil {
+            fmt.Println("Error sending HTTP request:", err)
+            return 0, false
+        }
+        defer resp.Body.Close()
 
-	var responseBody bytes.Buffer
-	_, err = responseBody.ReadFrom(resp.Body)
-	if err != nil {
-		fmt.Println("Error reading response body:", err)
-		return 0, false
-	}
+        var responseBody bytes.Buffer
+        _, err = responseBody.ReadFrom(resp.Body)
+        if err != nil {
+            fmt.Println("Error reading response body:", err)
+            return 0, false
+        }
 
-	var tr TransactionResponse
-	err = json.Unmarshal(responseBody.Bytes(), &tr)
-	if err != nil {
-		fmt.Printf("❌ JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
-		return 0, false
-	}
+        var tr TransactionResponse
+        err = json.Unmarshal(responseBody.Bytes(), &tr)
+        if err != nil {
+            fmt.Printf("❌ JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
+            return 0, false
+        }
 
-	// === SAFE INDEX CHECKS (prevents the panic) ===
-	if len(tr.Result.Meta.PreBalances) == 0 ||
-		len(tr.Result.Meta.PostBalances) == 0 ||
-		len(tr.Result.Transaction.Message.AccountKeys) == 0 {
-		return 0, false
-	}
+        // === SAFE INDEX CHECKS (prevents the panic) ===
+        if len(tr.Result.Meta.PreBalances) == 0 ||
+            len(tr.Result.Meta.PostBalances) == 0 ||
+            len(tr.Result.Transaction.Message.AccountKeys) == 0 {
+            return 0, false
+        }
 
-	initialAmount := tr.Result.Meta.PreBalances[0]
-	endingAmount := tr.Result.Meta.PostBalances[0]
-	fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
-	fee := tr.Result.Meta.Fee
+        initialAmount := tr.Result.Meta.PreBalances[0]
+        endingAmount := tr.Result.Meta.PostBalances[0]
+        fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
+        fee := tr.Result.Meta.Fee
 
-	endingPlusFee := endingAmount + fee
-	amountSent := initialAmount - endingPlusFee
+        endingPlusFee := endingAmount + fee
+        amountSent := initialAmount - endingPlusFee
 
-	if fromAddr == addr {
-		amountSent *= -1
-	}
+        if fromAddr == addr {
+            amountSent *= -1
+        }
 
-	// Only count positive incoming amounts as potential donations
-	if amountSent <= 0 {
-		return 0, false
-	}
+        // Only count positive incoming amounts as potential donations
+        if amountSent <= 0 {
+            return 0, false
+        }
 
-    // clean up duplicate messages by commenting this line
-	//fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
-  	//	addr[:5], amountSent, float64(amountSent)/1e9)
+        // clean up duplicate messages by commenting this line
+        //fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
+        //	addr[:5], amountSent, float64(amountSent)/1e9)
 
-	return amountSent, true
-}
-// getTransactionAmount END
+        return amountSent, true
+    }
+    // getTransactionAmount END
 
 
-func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string) {
+    func printSolTx(fromAddr, checkAddr, toAddr string, amountSent int64, sig string) {
 
-  decAmountSent := decimal.NewFromInt(amountSent)
-  decMultiplier := decimal.NewFromFloat(0.000000001)
-  amt := decAmountSent.Mul(decMultiplier)
+      decAmountSent := decimal.NewFromInt(amountSent)
+      decMultiplier := decimal.NewFromFloat(0.000000001)
+      amt := decAmountSent.Mul(decMultiplier)
 
-  if fromAddr == checkAddr {
-    fmt.Println("\nTRANSACTION OUT:")
-  } else {
-    fmt.Println("\nTRANSACTION IN:")
-  }
-  fmt.Println("To:", toAddr[:7])
-  fmt.Println("Sent:", amt)
-  fmt.Println("sig:", sig[:7])
-}
+      if fromAddr == checkAddr {
+        fmt.Println("\nTRANSACTION OUT:")
+      } else {
+        fmt.Println("\nTRANSACTION IN:")
+      }
+      fmt.Println("To:", toAddr[:7])
+      fmt.Println("Sent:", amt)
+      fmt.Println("sig:", sig[:7])
+    }
 
-// fetchFullTransaction gets the full parsed tx.
-// It stays completely silent during normal retries and only logs on final success or total failure.
-func fetchFullTransaction(signature string) interface{} {
-	url := "https://api.mainnet-beta.solana.com"
+    // fetchFullTransaction gets the full parsed tx.
+    // It stays completely silent during normal retries and only logs on final success or total failure.
+    func fetchFullTransaction(signature string) interface{} {
+        url := "https://api.mainnet-beta.solana.com"
 
-	for attempt := 1; attempt <= 12; attempt++ {
-		requestBody := fmt.Sprintf(`{
-			"jsonrpc": "2.0",
-			"id": 1,
-			"method": "getTransaction",
-			"params": [
-				"%s",
-				{
-					"encoding": "jsonParsed",
-					"maxSupportedTransactionVersion": 0,
-					"commitment": "finalized"
-				}
-			]
-		}`, signature)
+        for attempt := 1; attempt <= 12; attempt++ {
+            requestBody := fmt.Sprintf(`{
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "getTransaction",
+                "params": [
+                    "%s",
+                    {
+                        "encoding": "jsonParsed",
+                        "maxSupportedTransactionVersion": 0,
+                        "commitment": "finalized"
+                    }
+                ]
+            }`, signature)
 
-		req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
-		if err != nil {
-			time.Sleep(time.Duration(attempt*200) * time.Millisecond)
-			continue
-		}
-		req.Header.Set("Content-Type", "application/json")
+            req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+            if err != nil {
+                time.Sleep(time.Duration(attempt*200) * time.Millisecond)
+                continue
+            }
+            req.Header.Set("Content-Type", "application/json")
 
-		client := &http.Client{Timeout: 15 * time.Second}
-		resp, err := client.Do(req)
-		if err != nil {
-			time.Sleep(time.Duration(attempt*500) * time.Millisecond)
-			continue
-		}
-		defer resp.Body.Close()
+            client := &http.Client{Timeout: 15 * time.Second}
+            resp, err := client.Do(req)
+            if err != nil {
+                time.Sleep(time.Duration(attempt*500) * time.Millisecond)
+                continue
+            }
+            defer resp.Body.Close()
 
-		var txResponse map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
-			time.Sleep(time.Duration(attempt*400) * time.Millisecond)
-			continue
-		}
+            var txResponse map[string]interface{}
+            if err := json.NewDecoder(resp.Body).Decode(&txResponse); err != nil {
+                time.Sleep(time.Duration(attempt*400) * time.Millisecond)
+                continue
+            }
 
-		if result, exists := txResponse["result"]; exists && result != nil {
-			fmt.Printf("✅ [RPC] Full tx data received for %s\n", signature[:12]+"...")
-			return result
-		}
+            if result, exists := txResponse["result"]; exists && result != nil {
+                fmt.Printf("✅ [RPC] Full tx data received for %s\n", signature[:12]+"...")
+                return result
+            }
 
-		// Completely silent during normal "not yet available" retries
+            // Completely silent during normal "not yet available" retries
 		time.Sleep(time.Duration(attempt*800) * time.Millisecond)
 	}
 

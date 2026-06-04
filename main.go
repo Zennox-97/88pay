@@ -623,7 +623,9 @@ func startWallets() {
 	}
 
 	fmt.Println("startWallet() starting monitoring of solana addresses.")
-	for _, user := range users {
+	// 88Pay build version # goes here
+    fmt.Println("\n[88Pay] - Version 0.1Dev\n")
+    for _, user := range users {
 		solWallets[user.UserID] = utils.SolWallet{
 			Address: user.SolAddress,
 			Amount:  0.00,
