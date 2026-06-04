@@ -102,14 +102,27 @@ var lastProcessedSig = make(map[string]solana.Signature)
 
 // Color definitions
 //Green
-var green = color.New(color.FgGreen).SprintFunc()
-//var red = color.New(color.Red).SprintFunc()
-//var blue = color.New(color.Blue).SprintFunc()
+var greenD = color.New(color.FgGreen).SprintFunc()
+var green = color.New(color.FgHiGreen).SprintFunc()
+var red = color.New(color.FgRed).SprintFunc()
+var purple = color.New(color.FgHiMagenta).SprintFunc()
+var yellow = color.New(color.FgHiYellow).SprintFunc()
 // Keep color functions up with color var's
+func greenTextDark(s string) string{
+    return greenD(s)
+}
 func greenText(s string) string{
     return green(s)
 }
-
+func redText(s string) string{
+    return red(s)
+}
+func purpleText(s string) string{
+    return purple(s)
+}
+func yellowText(s string) string{
+    return yellow(s)
+}
 
 // persistLastSig writes the last processed signature for a wallet so we don't
 // re-scan the same history after every server restart.
@@ -288,7 +301,12 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 	}
 
 	// Print success message with memo for nice console output
-    fmt.Printf("[DONATION] Amount: %.6f SOL || Message: %s\n",float64(amount)/1e9, memo)
+    fmt.Printf("%s %s%.6f SOL || %s%s\n",
+        greenTextDark("[DONATION]"),
+        yellowText("Amount: "),
+        float64(amount)/1e9,
+        purpleText("Message: "),
+        memo)
 
 	// Second guard — belt-and-suspenders in case of any re-entrancy or timing
 	if processedSignatures[sig] {
