@@ -104,7 +104,6 @@ var lastProcessedSig = make(map[string]solana.Signature)
 //Green
 var greenD = color.New(color.FgGreen).SprintFunc()
 var green = color.New(color.FgHiGreen).SprintFunc()
-var red = color.New(color.FgRed).SprintFunc()
 var purple = color.New(color.FgHiMagenta).SprintFunc()
 var yellow = color.New(color.FgHiYellow).SprintFunc()
 // Keep color functions up with color var's
@@ -113,9 +112,6 @@ func greenTextDark(s string) string{
 }
 func greenText(s string) string{
     return green(s)
-}
-func redText(s string) string{
-    return red(s)
 }
 func purpleText(s string) string{
     return purple(s)

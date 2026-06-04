@@ -38,6 +38,7 @@ import (
 	"time"
 	"unicode/utf8"
 	//"github.com/realclientip/realclientip-go"
+    "github.com/fatih/color"
 )
 
 const username = "admin"
@@ -120,6 +121,12 @@ type Route_ struct {
 }
 
 var routes_ []Route_
+
+// Red color for console output
+var red = color.New(color.FgHiRed).SprintFunc()
+func redText(s string) string{
+    return red(s)
+}
 
 // Define a new template that only contains the table content
 var tableTemplate = template.Must(template.New("table").Parse(`
@@ -624,7 +631,7 @@ func startWallets() {
 
 	fmt.Println("startWallet() starting monitoring of solana addresses.")
 	// 88Pay build version # goes here
-    fmt.Println("\n[88Pay] - Version 0.1Dev\n")
+    fmt.Printf("\n%s\n\n", redText("[88 Pay] - Version 0.1 Dev"))
     for _, user := range users {
 		solWallets[user.UserID] = utils.SolWallet{
 			Address: user.SolAddress,
