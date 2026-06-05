@@ -122,10 +122,15 @@ type Route_ struct {
 
 var routes_ []Route_
 
-// Red color for console output
+// Color Definitions for main.go
 var red = color.New(color.FgHiRed).SprintFunc()
 func redText(s string) string{
     return red(s)
+}
+
+var green = color.New(color.FgHiGreen).SprintFunc()
+func greenText(s string) string{
+    return green(s)
 }
 
 // Define a new template that only contains the table content
@@ -630,7 +635,56 @@ func startWallets() {
 	}
 
 	fmt.Println("startWallet() starting monitoring of solana addresses.")
-	// 88Pay build version # goes here
+	
+    /** 88 Pay banner and version number **/
+    // 88 Pay build version and console banner here
+    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf("\n")
+    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf("\n")
+    fmt.Printf("\n")
+    // big 88 text here
+    big88 := []string{
+		"  ##########      ##########  ",
+		" ############    ############ ",
+		"####      ####  ####      ####",
+		"####      ####  ####      ####",
+		"####      ####  ####      ####",
+		" ############    ############ ",
+		"####      ####  ####      ####",
+		"####      ####  ####      ####",
+		"####      ####  ####      ####",
+		" ############    ############ ",
+		"  ##########      ##########  ",
+	}
+
+	leftPad := strings.Repeat(" ", 25)
+	for _, line := range big88 {
+		fmt.Println(leftPad + redText(line))
+	}
+
+    fmt.Printf("\n")
+    
+    bigPay := []string{
+		"##########      ###########     ###      ###",
+		"##      ##     ####     ####    ####    ####",
+		"##########     #############     ########## ",
+		"##             ###       ###        ####    ",
+		"##             ###       ###        ####    ",
+		"##             ###       ###        ####    ",
+	}
+
+    leftPadToo := strings.Repeat(" ", 17) // centers the 46-char art in 80 cols
+	for _, line := range bigPay {
+		fmt.Println(leftPadToo + greenText(line))
+	}
+
+    fmt.Printf("\n")
+    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf("\n")
+    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf("\n")
+    /** End of banner and version **/
     fmt.Printf("\n%s\n\n", redText("[88 Pay] - Version 0.1 Dev"))
     for _, user := range users {
 		solWallets[user.UserID] = utils.SolWallet{
@@ -897,13 +951,14 @@ func getAllBilling() ([]utils.BillingData, error) {
 			log.Println(err)
 		}
 
-		fmt.Println("UserID: ", billingData.UserID)
+        /** Server Start Messages **/
+		fmt.Println("Server starting...")
 		fmt.Println("Amount This Month: ", billingData.AmountThisMonth)
 		fmt.Println("Amount Total: ", billingData.AmountTotal)
-		fmt.Println("Enabled: ", billingData.Enabled)
-		fmt.Println("Need To Pay: ", billingData.NeedToPay)
-		fmt.Println("Created At: ", billingData.CreatedAt)
-		fmt.Println("Updated At: ", billingData.UpdatedAt)
+		//fmt.Println("Enabled: ", billingData.Enabled)
+		//fmt.Println("Need To Pay: ", billingData.NeedToPay)
+		fmt.Println("Crypto Wallet Added  At: ", billingData.CreatedAt)
+		fmt.Println("Last Wallet Update: ", billingData.UpdatedAt)
 
 		billings = append(billings, billingData)
 	}
