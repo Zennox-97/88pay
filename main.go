@@ -53,7 +53,7 @@ var NameMaxChar int = 25
 var starting_port int = 28088
 
 // Default page when loading "127.0.0.1:8900"
-var host_url string = "http://127.0.0.1:8900/login"
+var host_url string = "http://127.0.0.1:8900/"
 
 var addressSliceSolana []utils.AddressSolana
 
@@ -638,6 +638,7 @@ func startWallets() {
 	
     /** 88 Pay banner and version number **/
     // 88 Pay build version and console banner here
+    fmt.Printf("\n")
     fmt.Printf(strings.Repeat(redText("#"), 80))
     fmt.Printf("\n")
     fmt.Printf(strings.Repeat(redText("#"), 80))
@@ -4005,17 +4006,20 @@ func getIPAddress(r *http.Request) string {
 			fmt.Println(err)
 		}
 	} else {
-		log.Println("username = ", username)
-		if username != "" {
-			errorHandler(w, r, "User not found", "didn't find a ferret account with that username", "No username was found.")
-			return
-		}
-		// If no username is present in the URL path, serve the indexTemplate
-		err := indexTemplate.Execute(w, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	    log.Println("username = ", username)
+        if username != "" {
+            errorHandler(w, r,
+                "User not found",
+                "We couldn't find an account with that username.",
+                "No username was found.")
+            return
+        }
+        // serve index template for root or empty path
+        err := indexTemplate.Execute(w, nil)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return	
+        }
 	}
 }
 

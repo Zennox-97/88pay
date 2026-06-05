@@ -1,8 +1,6 @@
 # 88 Pay
 
-Free, self-hosted crypto donation service that interfaces with OBS.
-You cannot be debanked, you cannot be censored. This is to be used by anybody who wants to stream and accept donations
-
+Free, self-hosted cryptocurrency donation service that interfaces with OBS.
 
 # What is 88 Pay?
 88 Pay is a self-hosted streaming donation handler that utilizes cryptocurrency and is impossible to debank.
@@ -10,9 +8,9 @@ After Entropy got debanked many streamers had to scramble to set up a powerchat,
 too many reports of "hateful" streams.
 88 Pay casts no judgement and is being built because a truly independent system for getting paid by viewers for streams needs to exist.
 Solana is the primary coin for donation. The memo field in each transaction works perfectly as a custom TTS message input.
-Currently the project also works with Ethereum and Monero, but no such custom TTS works for these coins.
+Currently the project also works with Ethereum, Monero and a handful of others.
 
-Stream, say, and do whatever you want and get paid doing it. That's the point of this project.
+Stream, say, and do whatever you want and get paid to do it. That's the point of this project.
 
 
 ## Current Goals
@@ -89,7 +87,7 @@ This is a fork from [fork source here]. Would not have been possible without Pau
 
 ### Donate
 
-To support the original creator of this project, send XMR to Paul Town at:
+To support the creator that made this fork possible, send XMR to Paul Town at:
 `88K988HXHBTZZEFACejzJRDe7zMiKviesFKWtq4Q3Bo6VZfPZDWFzbod4Kn7SudVSBKhu5GqMUqBUXFNj5wBLyWuNWe4nqN`
 
 To support the creator of 88 Pay, send Solana to me at:
