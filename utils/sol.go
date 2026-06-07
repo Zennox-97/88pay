@@ -213,8 +213,11 @@ func getTransactionsForAddresses() {
 		wallet, sameBalance = checkSameBalanceSol(wallet)
 
 		if sameBalance {
-			fmt.Println("Sol wallet the same balance, not getting new txs")
-			time.Sleep(10 * time.Second)
+			// Debug line
+            //fmt.Println("Sol wallet the same balance, not getting new txs")
+			fmt.Println("Awaiting first donation...")
+            time.Sleep(10 * time.Second)
+            fmt.Println("Checking wallet...")
 			continue
 		}
 

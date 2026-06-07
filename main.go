@@ -268,6 +268,54 @@ func donationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+
+// processNewSolDonation is called by the Solana monitor for every valid incoming donation.
+// It creates the OBS alert queue entry using the real on-chain memo and amount.
+func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
+    user, valid := getUserByUsernameCached("admin")
+    if !valid {
+        log.Println("processNewSolDonation: no admin user found")
+        return
+    }
+
+    // Convert lamports to SOL for display (amount is in lamports from the chain)
+    amountSOL := float64(amount) / 1_000_000_000.0
+    amountStr := fmt.Sprintf("%.6f", amountSOL)
+
+    // Use the memo as the message shown in the alert + spoken by TTS
+    message := memo
+    if strings.TrimSpace(message) == "" {
+        message = "Anonymous Solana donation"
+    }
+
+    donorName := "Solana Donor"
+
+    usdValue := 0.0 // TODO: wire real price feed later if desired
+
+    err := createNewQueueEntry(
+        db,
+        user.UserID,
+        addr,
+        donorName,
+        message,     // ← real memo goes here
+        amountStr,
+        "SOL",
+        usdValue,
+        "",
+    )
+    if err != nil {
+        log.Printf("processNewSolDonation: failed to create queue entry: %v", err)
+        return
+    }
+
+    log.Printf("✅ Solana donation queued → %s sent %s SOL | memo: %s (sig: %s)",
+        donorName, amountStr, message, sig)
+}
+
+
+
+
 func main() {
 
 	// Open the log file in append mode, create it if it doesn't exist
@@ -312,7 +360,7 @@ func main() {
 	go startWallets()
 
     // Set up callback for new SOL donations with memo support
-	utils.SetSolanaDonationCallback(ProcessNewSolanaDonation)
+	//utils.SetSolanaDonationCallback(ProcessNewSolDonation)
 
 	time.Sleep(5 * time.Second)
 	log.Println("Starting server")
@@ -694,8 +742,10 @@ func startWallets() {
 		}
 	}
 
-	utils.SetSolWallets(solWallets)
-	go utils.StartMonitoringSolana()
+    utils.SetSolWallets(solWallets)
+    // Register callback to turn tx's into OBS alerts
+    utils.SetSolanaDonationCallback(ProcessNewSolDonation)
+    go utils.StartMonitoringSolana()
 }
 
 func checkValidSubscription(DateEnabled time.Time) bool {
@@ -769,35 +819,7 @@ func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/* Obsolete, commenting and imminent deletion
-func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
-	if checkLoggedInAdmin(w, r) {
-		generateMoreInviteCodes(5)
-		http.Redirect(w, r, "/usermanager", http.StatusSeeOther)
-		allUsersHandler(w, r)
-	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
 
-}
-*/
-
-/*
-func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
-
-	if checkLoggedInAdmin(w, r) {
-		PublicRegistrationsEnabled = !PublicRegistrationsEnabled
-		http.Redirect(w, r, "/usermanager", http.StatusSeeOther)
-		allUsersHandler(w, r)
-	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-}
-
-*/
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
@@ -806,6 +828,8 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	allUsersHandler(w, r)
 }
+
+
 
 func updateEnabledDate(userID int) error {
 	// Get the current time
@@ -819,6 +843,8 @@ func updateEnabledDate(userID int) error {
 
 	return nil
 }
+
+
 
 func getAllCodes() map[string]utils.InviteCode {
 
@@ -844,6 +870,8 @@ func getAllCodes() map[string]utils.InviteCode {
 	return inviteCodeMap
 
 }
+
+
 
 func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
@@ -937,6 +965,8 @@ func getAllUsers() ([]utils.User, error) {
 	return users, nil
 }
 
+
+
 func getAllBilling() ([]utils.BillingData, error) {
 	var billings []utils.BillingData
 	rows, err := db.Query("SELECT * FROM billing")
@@ -972,6 +1002,8 @@ func getAllBilling() ([]utils.BillingData, error) {
 	return billings, nil
 }
 
+
+
 func getActiveETHUsers(db *sql.DB) ([]*utils.User, error) {
 	var users []*utils.User
 
@@ -998,6 +1030,8 @@ func getActiveETHUsers(db *sql.DB) ([]*utils.User, error) {
 	}
 	return users, nil
 }
+
+
 
 func getActiveXMRUsers(db *sql.DB) ([]*utils.User, error) {
 	var users []*utils.User
@@ -1027,6 +1061,8 @@ func getActiveXMRUsers(db *sql.DB) ([]*utils.User, error) {
 	return users, nil
 }
 
+
+
 func getUserCryptosEnabled(user utils.User) (utils.User, error) {
 
 	user.CryptosEnabled.XMR = false
@@ -1042,6 +1078,8 @@ func getUserCryptosEnabled(user utils.User) (utils.User, error) {
 	return user, nil
 
 }
+
+
 
 // get links for a user
 func getUserLinks(user utils.User) ([]utils.Link, error) {
@@ -1073,6 +1111,8 @@ func getUserLinks(user utils.User) ([]utils.Link, error) {
 	return links, nil
 }
 
+
+
 func setServerVars() {
 	log.Println("Starting.")
 	log.Println("		 ..")
@@ -1080,6 +1120,8 @@ func setServerVars() {
 	log.Println("------------ setServerVars()")
 	setMinDonos()
 }
+
+
 
 func createTestDono(user_id int, name string, curr string, message string, amount string, usdAmount float64, media_url string) {
 	valid, media_url_ := checkDonoForMediaUSDThreshold(media_url, usdAmount)
@@ -1098,6 +1140,8 @@ func createTestDono(user_id int, name string, curr string, message string, amoun
 	addDonoToDonoBar(amount, curr, user_id)
 }
 
+
+
 func replayDono(donation utils.Donation, userID int) {
 	valid, media_url_ := checkDonoForMediaUSDThreshold(donation.DonationMedia, convertToFloat64(donation.USDValue))
 
@@ -1111,6 +1155,8 @@ func replayDono(donation utils.Donation, userID int) {
 	}
 }
 
+
+
 func convertToFloat64(value string) float64 {
 	f, err := strconv.ParseFloat(value, 64)
 	if err != nil {
@@ -1118,6 +1164,8 @@ func convertToFloat64(value string) float64 {
 	}
 	return f
 }
+
+
 
 // extractVideoID extracts the video ID from a YouTube URL
 func extractVideoID(url string) string {
@@ -1130,6 +1178,8 @@ func extractVideoID(url string) string {
 	}
 	return videoID
 }
+
+
 
 func viewDonosHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -1223,6 +1273,8 @@ func viewDonosHandler(w http.ResponseWriter, r *http.Request) {
 	tpl.Execute(w, data)
 }
 
+
+
 func setUserMinDonos(user utils.User) utils.User {
 	var err error
 	user.MinSol, _ = strconv.ParseFloat(fmt.Sprintf("%.5f", (float64(user.MinDono)/prices.Solana)), 64)
@@ -1244,11 +1296,15 @@ func setUserMinDonos(user utils.User) utils.User {
 	return user
 }
 
+
+
 func setMinDonos() {
 	for i := range globalUsers {
 		globalUsers[i] = setUserMinDonos(globalUsers[i])
 	}
 }
+
+
 
 func fetchExchangeRates() {
 	for {
@@ -1266,12 +1322,16 @@ func fetchExchangeRates() {
 
 }
 
+
+
 func createNewEthDono(name string, message string, mediaURL string, amountNeeded float64, cryptoCode string, encrypted_ip string) utils.SuperChat {
 	new_dono := utils.CreatePendingDono(name, message, mediaURL, amountNeeded, cryptoCode, encrypted_ip)
 	pending_donos = utils.AppendPendingDono(pending_donos, new_dono)
 
 	return new_dono
 }
+
+
 
 func startMoneroWallet(portInt, userID int, user utils.User) {
 	portID := getPortID(xmrWallets, userID)
@@ -1322,6 +1382,8 @@ func startMoneroWallet(portInt, userID int, user utils.User) {
 	updateUser(user)
 }
 
+
+
 func CheckMoneroPort(userID int) bool {
 	payload := strings.NewReader(`{"jsonrpc":"2.0","id":"0","method":"make_integrated_address"}`)
 	portID := getPortID(xmrWallets, userID)
@@ -1357,6 +1419,8 @@ func CheckMoneroPort(userID int) bool {
 	return true
 }
 
+
+
 func stopMoneroWallet(user utils.User) {
 	portID := getPortID(xmrWallets, user.UserID)
 
@@ -1384,6 +1448,8 @@ func stopMoneroWallet(user utils.User) {
 	// Print the output of the command
 	fmt.Println(string(output))
 }
+
+
 
 func checkDonos() {
 	for {
@@ -1424,6 +1490,8 @@ func checkDonos() {
 	}
 }
 
+
+
 func getAdminETHAdd() string {
 	user, validUser := getUserByUsernameCached(username)
 
@@ -1433,6 +1501,8 @@ func getAdminETHAdd() string {
 
 	return user.EthAddress
 }
+
+
 
 func checkBillingAccounts() {
 	for {
@@ -1476,6 +1546,8 @@ func checkBillingAccounts() {
 		time.Sleep(time.Duration(30) * time.Second)
 	}
 }
+
+
 
 func renewUserSubscription(user utils.User) {
 	user.BillingData.Enabled = true
@@ -4686,31 +4758,6 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	}
 }
 
-// ProcessNewSolanaDonation handles spontaneous donations + memo for TTS/alert
-func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
-	amountSOL := float64(amountLamports) / 1_000_000_000
-
-	userID := getUserIDBySolAddress(addr)
-	if userID == 0 {
-		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
-		return
-	}
-
-	message := memo
-	if message == "" {
-		message = "Anonymous Donation"
-	}
-
-	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
-		fmt.Sprintf("%.9f", amountSOL), "SOL",
-		getUSDValue(amountSOL, "SOL"), sig)
-
-	if err == nil {
-		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
-	} else {
-		fmt.Printf("[ERROR] Failed to queue SOL donation: %v\n", err)
-	}
-}
 
 
 /*** SOLANA PROCESSOR - ADD MEMO PARSING SOMEWHER HERE ***/
