@@ -3802,7 +3802,7 @@ func alertOBSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if newDono {
-		fmt.Println("Showing NEW DONO!")
+		fmt.Println("Donation displayed on OBS!")
 		a.DisplayToggle = ""
 	} else {
 		a.MediaURL = ""
@@ -4191,7 +4191,7 @@ func checkDonoQueue(db *sql.DB, userID int) (bool, error) {
 		return false, err
 	}
 
-	fmt.Println("Showing notif:", name, ":", message)
+	//fmt.Println("Showing notif:", name, ":", message)         debug line for getting OBS alert success to display
 	// update the form in memory
 	a.Name = name
 	a.Message = message

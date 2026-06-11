@@ -348,7 +348,7 @@ func addSolanaTransaction(addr, sig string, amount int64) {
     if err != nil {
         log.Printf("addSolanaTransaction: failed to create queue entry: %v", err)
     } else {
-        log.Printf("✅ Real Solana donation queued for OBS → Solana Donor sent %s SOL | memo: %s",
+        log.Printf("Solana Donor sent %s SOL | memo: %s",
             amountStr, message)
     }
 

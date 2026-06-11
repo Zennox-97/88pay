@@ -6,7 +6,8 @@
 <title>OBS Alert</title>
 <style>
   small{
-    zoom: 0.2;
+    /*zoom: 0.2;*/
+    position:0;
   }
   body {
     data-display-toggle="{{.DisplayToggle}}"
@@ -128,7 +129,7 @@
       <h1>
         <div id="center1" style="display: flex; justify-content: center; align-items: center;">
           <br>
-          <small><img src="{{.Userpath}}/gifs/default.gif"></small>
+          <small><img src="{{.Userpath}}/gifs/default.gif" style="width:400px;height:400px;"></small>
           {{if eq .DisplayToggle "display: none;"}}
           {{else}}
           <a hidden>
