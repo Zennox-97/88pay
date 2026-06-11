@@ -703,7 +703,7 @@ func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
 
 
 func startWallets() {
-	printUserColumns()
+    printUserColumns()
 	users, err := getAllUsers()
 	if err != nil {
 		log.Fatalf("startWallet() error:", err)
@@ -793,19 +793,24 @@ func startWallets() {
     /** End of banner and version **/
     
     fmt.Printf("\n%s\n\n", redText("[88Pay] - Version 0.1 Dev"))
-    
+   
+
     for _, user := range users {
-		solWallets[user.UserID] = utils.SolWallet{
-			Address: user.SolAddress,
-			Amount:  0.00,
-		}
-	}
+        solWallets[user.UserID] = utils.SolWallet{
+            Address: user.SolAddress,
+            Amount:  0.00,
+        }
+    }
 
     utils.SetSolWallets(solWallets)
-    // Register callback to turn tx's into OBS alerts
+
+    // Register callback so real Solana txs create OBS alerts
     utils.SetSolanaDonationCallback(ProcessNewSolDonation)
+
     go utils.StartMonitoringSolana()
 }
+
+
 
 func checkValidSubscription(DateEnabled time.Time) bool {
 	oneMonthAhead := DateEnabled.AddDate(0, 1, 0)
@@ -816,6 +821,9 @@ func checkValidSubscription(DateEnabled time.Time) bool {
 	log.Println("checkValidSubscription() User not valid")
 	return false
 }
+
+
+
 
 func getLoggedInUser(w http.ResponseWriter, r *http.Request) (utils.User, bool) {
 	cookie, err := r.Cookie("session_token")
@@ -830,6 +838,9 @@ func getLoggedInUser(w http.ResponseWriter, r *http.Request) (utils.User, bool) 
 
 	return user, true
 }
+
+
+
 
 func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 

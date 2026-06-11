@@ -202,7 +202,8 @@ func SetSolWallets(sW map[int]SolWallet) {
 // SetSolanaDonationCallback registers the callback from main.go
 // so new incoming SOL transactions with memos trigger the alert + TTS
 func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo string)) {
-	processNewSolDonation = fn
+    fmt.Println(">>> [DEBUG] SetSolanaDonationCallback was called")
+    processNewSolDonation = fn
 }
 
 // getTransactionsForAddresses polls for new Solana transactions.
@@ -311,6 +312,9 @@ func addSolanaTransaction(addr, sig string, amount int64) {
 	if processedSignatures[sig] {
 		return
 	}
+
+    processNewSolDonation(addr, sig, amount, memo)
+
 	// Trigger the actual alert + TTS
 	if processNewSolDonation != nil {
 		processNewSolDonation(addr, sig, amount, memo)
@@ -355,104 +359,104 @@ func checkSameBalanceSol(wallet SolWallet) (SolWallet, bool) {
 
 }
 
-    func getSOLBalance(address string) (float64, error) {
+func getSOLBalance(address string) (float64, error) {
 
-      if address == "" {
+    if address == "" {
         return 0, nil
-      }
-      balance, err := solClient.GetBalance(
-        context.TODO(), // request context
-        address,        // wallet to fetch balance for
+    }
+    balance, err := solClient.GetBalance(
+    context.TODO(), // request context
+    address,        // wallet to fetch balance for
       )
-      if err != nil {
+    if err != nil {
         return 0, err
-      }
-      return float64(balance) / 1e9, nil
+    }
+        return float64(balance) / 1e9, nil
+}
+
+// getTransactionAmount safely parses a Solana transaction and extracts amount + memo
+func getTransactionAmount(sig, addr string) (int64, bool) {
+    defer func() {
+        if r := recover(); r != nil {
+            fmt.Printf("Recovered from panic in getTransactionAmount on %s: %v\n", sig[:12]+"...", r)
+            time.Sleep(5 * time.Second)
+        }
+    }()
+
+    if containsTransaction(sig) {
+        return 0, false
     }
 
-    // getTransactionAmount safely parses a Solana transaction and extracts amount + memo
-    func getTransactionAmount(sig, addr string) (int64, bool) {
-        defer func() {
-            if r := recover(); r != nil {
-                fmt.Printf("Recovered from panic in getTransactionAmount on %s: %v\n", sig[:12]+"...", r)
-                time.Sleep(5 * time.Second)
-            }
-        }()
+    url := "https://api.mainnet-beta.solana.com"
+    requestBody := fmt.Sprintf(`{
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "getTransaction",
+        "params": [
+            "%s",
+            "json"
+        ]
+    }`, sig)
 
-        if containsTransaction(sig) {
-            return 0, false
-        }
+    req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
+    if err != nil {
+        fmt.Println("Error creating HTTP request:", err)
+        return 0, false
+    }
+    req.Header.Set("Content-Type", "application/json")
 
-        url := "https://api.mainnet-beta.solana.com"
-        requestBody := fmt.Sprintf(`{
-            "jsonrpc": "2.0",
-            "id": 1,
-            "method": "getTransaction",
-            "params": [
-                "%s",
-                "json"
-            ]
-        }`, sig)
+    client := &http.Client{Timeout: 15 * time.Second}
+    resp, err := client.Do(req)
+    if err != nil {
+        fmt.Println("Error sending HTTP request:", err)
+        return 0, false
+    }
+    defer resp.Body.Close()
 
-        req, err := http.NewRequest("POST", url, bytes.NewBuffer([]byte(requestBody)))
-        if err != nil {
-            fmt.Println("Error creating HTTP request:", err)
-            return 0, false
-        }
-        req.Header.Set("Content-Type", "application/json")
+    var responseBody bytes.Buffer
+    _, err = responseBody.ReadFrom(resp.Body)
+    if err != nil {
+        fmt.Println("Error reading response body:", err)
+        return 0, false
+    }
 
-        client := &http.Client{Timeout: 15 * time.Second}
-        resp, err := client.Do(req)
-        if err != nil {
-            fmt.Println("Error sending HTTP request:", err)
-            return 0, false
-        }
-        defer resp.Body.Close()
+    var tr TransactionResponse
+    err = json.Unmarshal(responseBody.Bytes(), &tr)
+    if err != nil {
+        fmt.Printf("[!ERROR!] JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
+        return 0, false
+    }
 
-        var responseBody bytes.Buffer
-        _, err = responseBody.ReadFrom(resp.Body)
-        if err != nil {
-            fmt.Println("Error reading response body:", err)
-            return 0, false
-        }
+    // === SAFE INDEX CHECKS (prevents the panic) ===
+    if len(tr.Result.Meta.PreBalances) == 0 ||
+        len(tr.Result.Meta.PostBalances) == 0 ||
+        len(tr.Result.Transaction.Message.AccountKeys) == 0 {
+        return 0, false
+    }
 
-        var tr TransactionResponse
-        err = json.Unmarshal(responseBody.Bytes(), &tr)
-        if err != nil {
-            fmt.Printf("[!ERROR!] JSON unmarshal failed for %s: %v\n", sig[:12]+"...", err)
-            return 0, false
-        }
+    initialAmount := tr.Result.Meta.PreBalances[0]
+    endingAmount := tr.Result.Meta.PostBalances[0]
+    fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
+    fee := tr.Result.Meta.Fee
 
-        // === SAFE INDEX CHECKS (prevents the panic) ===
-        if len(tr.Result.Meta.PreBalances) == 0 ||
-            len(tr.Result.Meta.PostBalances) == 0 ||
-            len(tr.Result.Transaction.Message.AccountKeys) == 0 {
-            return 0, false
-        }
+    endingPlusFee := endingAmount + fee
+    amountSent := initialAmount - endingPlusFee
 
-        initialAmount := tr.Result.Meta.PreBalances[0]
-        endingAmount := tr.Result.Meta.PostBalances[0]
-        fromAddr := tr.Result.Transaction.Message.AccountKeys[0]
-        fee := tr.Result.Meta.Fee
+    if fromAddr == addr {
+        amountSent *= -1
+    }
 
-        endingPlusFee := endingAmount + fee
-        amountSent := initialAmount - endingPlusFee
-
-        if fromAddr == addr {
-            amountSent *= -1
-        }
-
-        // Only count positive incoming amounts as potential donations
-        if amountSent <= 0 {
-            return 0, false
-        }
+   // Only count positive incoming amounts as potential donations
+    if amountSent <= 0 {
+        return 0, false
+    }
 
         // clean up duplicate messages by commenting this line
         //fmt.Printf("✅ SOL: %s... Received: %d lamports (%.6f SOL)\n",
         //	addr[:5], amountSent, float64(amountSent)/1e9)
 
-        return amountSent, true
-    }
+    return amountSent, true
+}
     // getTransactionAmount END
 
 
