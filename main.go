@@ -269,57 +269,6 @@ func donationsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 
-/** Try moving this to right before func startWallets and see if there is any change
-// processNewSolDonation is called by the Solana monitor for every valid incoming donation.
-// It creates the OBS alert queue entry using the real on-chain memo and amount.
-func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
-    
-    // Debug logs
-    log.Println(">>> [DEBUG] ProcessNewSolDonation WAS CALLED <<<")
-    log.Printf(">>> addr=%s amount=%d memo=%q", addr, amount, memo)
-
-    user, valid := getUserByUsernameCached("admin")
-    if !valid {
-        log.Println("processNewSolDonation: no admin user found")
-        return
-    }
-
-    // Convert lamports to SOL for display (amount is in lamports from the chain)
-    amountSOL := float64(amount) / 1_000_000_000.0
-    amountStr := fmt.Sprintf("%.6f", amountSOL)
-
-    // Use the memo as the message shown in the alert + spoken by TTS
-    message := memo
-    if strings.TrimSpace(message) == "" {
-        message = "Anonymous Solana donation"
-    }
-
-    donorName := "Solana Donor"
-
-    usdValue := 0.0 // TODO: wire real price feed later if desired
-
-    err := createNewQueueEntry(
-        db,
-        user.UserID,
-        addr,
-        donorName,
-        message,     // ← real memo goes here
-        amountStr,
-        "SOL",
-        usdValue,
-        "",
-    )
-    if err != nil {
-        log.Printf("processNewSolDonation: failed to create queue entry: %v", err)
-        return
-    }
-
-    log.Printf("✅ Solana donation queued → %s sent %s SOL | memo: %s (sig: %s)",
-        donorName, amountStr, message, sig)
-}
-
-**/
-
 
 func main() {
 
@@ -361,6 +310,11 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
+
+    // createNewQueueEntry | try this spot first
+    utils.CreateQueueEntry = createNewQueueEntry
+    utils.GlobalUsers = globalUsers
+    utils.DB = db
 
 	go startWallets()
 
@@ -652,25 +606,27 @@ func main() {
 	}
 }
 
-// processNewSolDonation is called by the Solana monitor for every valid incoming donation.
-// It creates the OBS alert queue entry using the real on-chain memo and amount.
-func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
-    
-    // Debug logs
-    log.Println(">>> [DEBUG] ProcessNewSolDonation WAS CALLED <<<")
-    log.Printf(">>> addr=%s amount=%d memo=%q", addr, amount, memo)
+/** Temporary comment out while using a debug version
 
-    user, valid := getUserByUsernameCached("admin")
-    if !valid {
-        log.Println("processNewSolDonation: no admin user found")
-        return
+// ProcessNewSolDonation turns a real Solana tx into an OBS alert queue entry.
+// Very defensive user lookup so it works even if globalUsers is sparse.
+func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
+    var targetUserID int
+
+    // Try to find any user in globalUsers
+    for id := range globalUsers {
+        targetUserID = id
+        break
     }
 
-    // Convert lamports to SOL for display (amount is in lamports from the chain)
+    // Last-resort fallback for dev setups
+    if targetUserID == 0 {
+        targetUserID = 1
+    }
+
     amountSOL := float64(amount) / 1_000_000_000.0
     amountStr := fmt.Sprintf("%.6f", amountSOL)
 
-    // Use the memo as the message shown in the alert + spoken by TTS
     message := memo
     if strings.TrimSpace(message) == "" {
         message = "Anonymous Solana donation"
@@ -678,26 +634,75 @@ func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
 
     donorName := "Solana Donor"
 
-    usdValue := 0.0 // TODO: wire real price feed later if desired
-
     err := createNewQueueEntry(
         db,
-        user.UserID,
+        targetUserID,
         addr,
         donorName,
-        message,     // ← real memo goes here
+        message,
         amountStr,
         "SOL",
-        usdValue,
+        0.0,
         "",
     )
     if err != nil {
-        log.Printf("processNewSolDonation: failed to create queue entry: %v", err)
+        log.Printf("ProcessNewSolDonation: failed to create queue entry: %v", err)
         return
     }
 
-    log.Printf("[!SUCCESS!]  Solana donation queued → %s sent %s SOL | memo: %s (sig: %s)",
-        donorName, amountStr, message, sig)
+    log.Printf("[SUCCESS] Real Solana donation queued for OBS → %s sent %s SOL | memo: %s",
+        donorName, amountStr, message)
+    fmt.Printf("penis nigger test")
+}
+
+**/
+
+
+
+func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
+    log.Println(">>> [DEBUG] ProcessNewSolDonation ENTERED")
+
+    var targetUserID int
+    for id := range globalUsers {
+        targetUserID = id
+        break
+    }
+    if targetUserID == 0 {
+        targetUserID = 1
+    }
+    log.Println(">>> [DEBUG] Using targetUserID =", targetUserID)
+
+    amountSOL := float64(amount) / 1_000_000_000.0
+    amountStr := fmt.Sprintf("%.6f", amountSOL)
+
+    message := memo
+    if strings.TrimSpace(message) == "" {
+        message = "Anonymous Solana donation"
+    }
+
+    log.Println(">>> [DEBUG] About to call createNewQueueEntry")
+
+    err := createNewQueueEntry(
+        db,
+        targetUserID,
+        addr,
+        "Solana Donor",
+        message,
+        amountStr,
+        "SOL",
+        0.0,
+        "",
+    )
+
+    if err != nil {
+        log.Printf(">>> [DEBUG] createNewQueueEntry FAILED: %v", err)
+        return
+    }
+
+    log.Println(">>> [DEBUG] createNewQueueEntry SUCCESS")
+
+    log.Printf("[SUCCESS] Real Solana donation queued for OBS → Solana Donor sent %s SOL | memo: %s",
+        amountStr, message)
 }
 
 

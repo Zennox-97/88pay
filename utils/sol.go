@@ -18,6 +18,8 @@ import (
     //"log"
     "os"
     "github.com/fatih/color"
+    "log"
+    "database/sql"
 )
 
 /** Type / Structure definition zone **/
@@ -120,6 +122,11 @@ func yellowText(s string) string{
     return yellow(s)
 }
 
+// Variables for getting OBS to work
+var CreateQueueEntry func(db *sql.DB, user_id int, address string, name string, message string, amount string, currency string, dono_usd float64, media_url string) error
+var DB *sql.DB
+var GlobalUsers map[int]User
+
 // persistLastSig writes the last processed signature for a wallet so we don't
 // re-scan the same history after every server restart.
 func persistLastSig(walletAddr string, sig solana.Signature) {
@@ -202,7 +209,7 @@ func SetSolWallets(sW map[int]SolWallet) {
 // SetSolanaDonationCallback registers the callback from main.go
 // so new incoming SOL transactions with memos trigger the alert + TTS
 func SetSolanaDonationCallback(fn func(addr, sig string, amount int64, memo string)) {
-    fmt.Println(">>> [DEBUG] SetSolanaDonationCallback was called")
+    //fmt.Println(">>> [DEBUG] SetSolanaDonationCallback was called")
     processNewSolDonation = fn
 }
 
@@ -308,20 +315,48 @@ func addSolanaTransaction(addr, sig string, amount int64) {
         purpleText("Message: "),
         memo)
 
-	// Second guard — belt-and-suspenders in case of any re-entrancy or timing
-	if processedSignatures[sig] {
-		return
-	}
+    // === Directly create OBS alert queue entry (bypasses broken callback) ===
+    var targetUserID int
+    for id := range GlobalUsers {
+        targetUserID = id
+        break
+    }
+    if targetUserID == 0 {
+        targetUserID = 1
+    }
 
-    processNewSolDonation(addr, sig, amount, memo)
+    amountSOL := float64(amount) / 1_000_000_000.0
+    amountStr := fmt.Sprintf("%.6f", amountSOL)
 
-	// Trigger the actual alert + TTS
-	if processNewSolDonation != nil {
-		processNewSolDonation(addr, sig, amount, memo)
-	}
+    message := memo
+    if strings.TrimSpace(message) == "" {
+        message = "Anonymous Solana donation"
+    }
 
-	transactions = append(transactions, transaction)
+    err := CreateQueueEntry(
+        DB,
+        targetUserID,
+        addr,
+        "Solana Donor",
+        message,
+        amountStr,
+        "SOL",
+        0.0,
+        "",
+    )
+    
+    if err != nil {
+        log.Printf("addSolanaTransaction: failed to create queue entry: %v", err)
+    } else {
+        log.Printf("✅ Real Solana donation queued for OBS → Solana Donor sent %s SOL | memo: %s",
+            amountStr, message)
+    }
+
+    transactions = append(transactions, transaction)
 }
+
+
+
 // End of addSolanaTransaction
 
 func CreatePendingSolDono(name string, message string, mediaURL string, amountNeeded float64) SuperChat {
