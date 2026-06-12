@@ -5,10 +5,6 @@
 
 <title>OBS Alert</title>
 <style>
-  small{
-    /*zoom: 0.2;*/
-    position:0;
-  }
   body {
     data-display-toggle="{{.DisplayToggle}}"
     background: #262b3b;
@@ -121,6 +117,17 @@
     98% {opacity:0;}
   }
 
+   .dono-image{
+    position:center;
+    margin:0 auto;
+   }
+
+   .memo{
+    text-align:center;
+    text-outline:5px black;
+    text:white;
+    font-size:2rem;
+   }
 </style>
 
 </head>
@@ -129,7 +136,7 @@
       <h1>
         <div id="center1" style="display: flex; justify-content: center; align-items: center;">
           <br>
-          <small><img src="{{.Userpath}}/gifs/default.gif" style="width:400px;height:400px;"></small>
+          <!-- <small><img src="{{.Userpath}}/gifs/default.gif" style="width:400px;height:400px;"></small> --!>
           {{if eq .DisplayToggle "display: none;"}}
           {{else}}
           <a hidden>
@@ -143,8 +150,14 @@
           </beginquote>
         </div>
       </h1>
-
-      <blockquote>{{.Message}}</blockquote>
+        <div class="alert-container">
+            <div class="dono-image">
+                <img src="{{.Userpath}}/gifs/default.gif" style="width height:400px;" />
+            </div>
+            <div class="memo">
+                <p>{{.Message}}</p>
+            </div>
+        </div>
     </div>
     
     {{ if ne .MediaURL "" }}
