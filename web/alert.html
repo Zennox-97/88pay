@@ -117,16 +117,45 @@
     98% {opacity:0;}
   }
 
+
+
+   /* OBS donation alert container */
+   .alert-container{
+    display:flex;
+   }
+
+   /* Donation .gif */
    .dono-image{
-    position:center;
+    position:relative;
     margin:0 auto;
    }
 
+   .dono-title{
+    position:top;
+    text-shadow: 
+    -1px -1px 0 black,
+    1px -1px 0 black,
+    -1px 1px 0 black,
+    1px 1px 0 black;
+   }
+   /* Donation text */
    .memo{
     text-align:center;
     text-outline:5px black;
     text:white;
     font-size:2rem;
+   }
+
+   .dono-title-name{
+    margin-right:10px;
+   }
+
+   .dono-title-info{
+    margin-left:10px;
+   }
+
+   .top-dono-info{
+    border:3px solid green;
    }
 </style>
 
@@ -146,13 +175,24 @@
           </a>
           {{end}}
           <beginquote>
-            <b style="margin-right: 10px">{{.Name}} </b> sent <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
+          <div class="top-dono-info">
+            <b style="margin-right: 10px">NEW DONATION </b> - <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
+          </div>
           </beginquote>
         </div>
       </h1>
         <div class="alert-container">
             <div class="dono-image">
                 <img src="{{.Userpath}}/gifs/default.gif" style="width height:400px;" />
+            </div>
+            <div class="dono-title">
+            <p>
+                <b>
+                <div class="dono-title-name">New Donation!</div>
+                - 
+                <div class="dono-title-info">{{.Amount}}{{.Currency}}</div>
+                </b>
+            </p>
             </div>
             <div class="memo">
                 <p>{{.Message}}</p>
