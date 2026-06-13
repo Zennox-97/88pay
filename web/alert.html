@@ -121,13 +121,8 @@
 
    /* OBS donation alert container */
    .alert-container{
-    display:flex;
-   }
-
-   /* Donation .gif */
-   .dono-image{
     position:relative;
-    margin:0 auto;
+    display:flex;
    }
 
    .dono-title{
@@ -140,23 +135,37 @@
    }
    /* Donation text */
    .memo{
-    text-align:center;
-    text-outline:5px black;
+    position:absolute;
     text:white;
-    font-size:2rem;
+    font-family:serif;
+    font-size:21px;
+    text-align:center;
+    text-shadow:
+        -1px -1px 0 #000000,
+        1px -1px 0 #000000,
+        -1px 1px 0 #000000,
+        1px 1px 0 #000000;
+    overflow-y:auto;
+    margin:0;
    }
-
-   .dono-title-name{
-    margin-right:10px;
-   }
-
-   .dono-title-info{
-    margin-left:10px;
-   }
-
+   
    .top-dono-info{
     border:3px solid green;
    }
+
+   /* Donation .gif wrapper */
+   .dono-image{
+    position:relative;
+    margin:0 auto;
+    border:3px solid pink;
+   }
+
+   /* .gif control here */
+   .giffy{
+    border:3px solid red;
+    width:330px;
+    height:330px;
+    }
 </style>
 
 </head>
@@ -165,7 +174,6 @@
       <h1>
         <div id="center1" style="display: flex; justify-content: center; align-items: center;">
           <br>
-          <!-- <small><img src="{{.Userpath}}/gifs/default.gif" style="width:400px;height:400px;"></small> --!>
           {{if eq .DisplayToggle "display: none;"}}
           {{else}}
           <a hidden>
@@ -176,23 +184,14 @@
           {{end}}
           <beginquote>
           <div class="top-dono-info">
-            <b style="margin-right: 10px">NEW DONATION </b> - <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
+            <b style="margin-right: 10px">DONATION </b> - <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
           </div>
           </beginquote>
         </div>
       </h1>
         <div class="alert-container">
             <div class="dono-image">
-                <img src="{{.Userpath}}/gifs/default.gif" style="width height:400px;" />
-            </div>
-            <div class="dono-title">
-            <p>
-                <b>
-                <div class="dono-title-name">New Donation!</div>
-                - 
-                <div class="dono-title-info">{{.Amount}}{{.Currency}}</div>
-                </b>
-            </p>
+                <img class="giffy" src="{{.Userpath}}/gifs/default.gif" style="width height:400px;" />
             </div>
             <div class="memo">
                 <p>{{.Message}}</p>
