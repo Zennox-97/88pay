@@ -1,6 +1,8 @@
 *.bk
 default.gif
 *.gif
+default.mp3
+*.mp3
 webs.go
 webs.py
 *.db
