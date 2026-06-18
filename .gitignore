@@ -1,13 +1,10 @@
-
+*.bk
+default.gif
+*.gif
 webs.go
 webs.py
-users.db
-users.db
-*.db
 *.db
 apilol.go
-users.db
-*.db
 monero/monero-wallet-rpc.log
 alchemy_api
 infura_url
