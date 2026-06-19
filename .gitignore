@@ -19,7 +19,7 @@ logfile.txt
 *.json
 last_sigs.json
 
-users/
+users/*
 users_bak/
 
 tmp/
