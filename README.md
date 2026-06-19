@@ -1,8 +1,8 @@
-# 88 Pay
+# 88 Pay 0.5 BETA
 
 Free, self-hosted cryptocurrency donation service that interfaces with OBS.
 
-# What is 88 Pay?
+## What is 88 Pay?
 88 Pay is a self-hosted streaming donation handler that utilizes cryptocurrency and is impossible to debank.
 After Entropy got debanked many streamers had to scramble to set up a powerchat, which itself will ban you if it gets
 too many reports of "hateful" streams.
@@ -13,24 +13,14 @@ Currently the project also works with Ethereum, Monero and a handful of others.
 Stream, say, and do whatever you want and get paid to do it. That's the point of this project.
 
 
-## Current Goals
-[X] - Add memo field parsing for Solana transaction for custom TTS from viewers
-[X] - Remove all ferret.cash references
-[ ] - General UI improvements
-[ ] - Add "88Pay" logos
-[ ] - Add TTS word filtering to stop undesireable donations
-- [SOON] Reads TTS messages from Solana transaction memo fields for viewer interaction.
-- [SOON] Word filtering for TTS
-- Provides notifications and a progress bar usable in OBS as well as admin pages for settings like minimum donos.
-
-## [SOON] Windows Installation
+## Windows Installation
 
 1. Download/Clone 88pay into a folder of your choice
 2. Install GoLang 1.25 and TDM-GCC for windows
 -   https://github.com/jmeubank/tdm-gcc/releases/download/v10.3.0-tdm64-2/tdm64-gcc-10.3.0-2.exe
 -   https://go.dev/dl/go1.25.11.windows-amd64.msi
-3. Run "8start.bat"
-4. Close the terminal window when you want to stop recieving donations
+3. Run ```start.bat```
+4. Close the terminal window when you stop streaming
 
 ## Linux/Mac Installation
 
@@ -41,30 +31,31 @@ Stream, say, and do whatever you want and get paid to do it. That's the point of
 ## How to use 88 Pay
 A webserver at 127.0.0.1:8900 is running.
 Open your web browser of choice and in the top URL bar type `127.0.0.1:8900`
-You will see a login page, the login is 
-Username: admin
-Password: hunter123
-CHANGE THE PASSWORD IMMEDIATELY
+You will see a login page, the login is<br> 
+Username: admin<br>
+Password: hunter123<br>
+CHANGE THE PASSWORD IMMEDIATELY<br>
 If the login doesnt work, close the server and open it again. Sometimes it needs to be launched twice to set up the databse
 Once logged in, go to the settings tabs and set up your crypto wallet address, custom images, sounds and donation tiers.
 Interface the OBS links for alerts and donation bar directly into an OBS browser element
 Start streaming and enjoy receiving 100% of your donations (minus the super tiny transaction fees)
 88 Pay takes 0% of your donations. You keep everything.
 
-# Features
+## How viewers donate
+For those new to crypto, provide the following steps somewhere on stream or in your stream description
+1. Download Phantom Wallet
+2. Buy SOL using Phantom
+3. Send SOL to the streamers wallet address | Use the "Memo" field for custom TTS messages
+4. SOL transaction is picked up by 88Pay within 5-15 seconds and OBS alert is triggered.
+
+## Features
 - Sound and GIF for donos
 - TTS integration for donos
-- Keeping track of USD value
-- Selection of which dono methods are available
+- Displays USD value of SOL donations
+- Self-hosted
+- Cross-Platform (Linux and Windows, should run fine on Mac but has not been tested officially)
 
 This is currently designed to be run on a cloud server with nginx proxypass for TLS.
-
-# Monero Wallet Setup
-
-1. Generate a view only wallet using the `monero-wallet-gui` from getmonero.org. Preferably with no password (need to change code if you have a password)
-2. Upload the newly generated `walletname_viewonly` and `walletname_viewonly.keys` files in the user account.
-3. Download the `monero-wallet-rpc` binary that is bundled with the getmonero.org wallets.
-4. Place the 'monero-wallet-rpc' inside monero folder
 
 # Directories for the webserver
 IMMEDIATELY CHANGE THE ADMIN PASSWORD
@@ -77,18 +68,20 @@ IMMEDIATELY CHANGE THE ADMIN PASSWORD
 # License
 GPLv3
 
-### Origin
+
+
+## Origin
 The original fork has this text
 
 "This comes from [https://git.sr.ht/~anon_/shadowchat](https://git.sr.ht/~anon_/shadowchat) and the base logic (mostly rewritten now) is not Paul's original
 work, although without the base logic I would have never started doing this, so thank you to the great mind behind this."
 
-This is a fork from [fork source here]. Would not have been possible without Paul's work, which is now being modified by me.
+88Pay was originally a fork from [https://github.com/pautown/paulpay]. Initially this was going to be some code edits but became a much larger project and Would not have been possible without Paul's work, which is now being modified by me (Zennox).
 
-### Donate
+# Donate
 
-To support the creator that made this fork possible, send XMR to Paul Town at:
+To support the creator that made 88Pay possible, send XMR to Paul Town at:
 `88K988HXHBTZZEFACejzJRDe7zMiKviesFKWtq4Q3Bo6VZfPZDWFzbod4Kn7SudVSBKhu5GqMUqBUXFNj5wBLyWuNWe4nqN`
 
-To support the creator of 88 Pay, send Solana to me at:
+To support the creator of 88 Pay, send Solana to Zennox at:
 `5Ci84K1CJRVyWJHkxhsNuscBsXQZN7zG5AuVqWYYnjtf`
