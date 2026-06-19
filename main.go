@@ -489,6 +489,9 @@ func main() {
 
         http.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir("web/obs/media/"))))
         http.HandleFunc("/users/", handleUsers)
+        http.HandleFunc("/api/progress", apiProgressHandler)    // put apiProgressHandler call here
+
+        log.Println(">>> /api/progress route REGISTERED successfully")
 
         routes_ = []Route_{
             {"/updatecryptos", updateCryptosHandler},
@@ -605,57 +608,6 @@ func main() {
 		replayDono(donation, user.UserID)
 	}
 }
-
-/** Temporary comment out while using a debug version
-
-// ProcessNewSolDonation turns a real Solana tx into an OBS alert queue entry.
-// Very defensive user lookup so it works even if globalUsers is sparse.
-func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
-    var targetUserID int
-
-    // Try to find any user in globalUsers
-    for id := range globalUsers {
-        targetUserID = id
-        break
-    }
-
-    // Last-resort fallback for dev setups
-    if targetUserID == 0 {
-        targetUserID = 1
-    }
-
-    amountSOL := float64(amount) / 1_000_000_000.0
-    amountStr := fmt.Sprintf("%.6f", amountSOL)
-
-    message := memo
-    if strings.TrimSpace(message) == "" {
-        message = "Anonymous Solana donation"
-    }
-
-    donorName := "Solana Donor"
-
-    err := createNewQueueEntry(
-        db,
-        targetUserID,
-        addr,
-        donorName,
-        message,
-        amountStr,
-        "SOL",
-        0.0,
-        "",
-    )
-    if err != nil {
-        log.Printf("ProcessNewSolDonation: failed to create queue entry: %v", err)
-        return
-    }
-
-    log.Printf("[SUCCESS] Real Solana donation queued for OBS → %s sent %s SOL | memo: %s",
-        donorName, amountStr, message)
-    fmt.Printf("penis nigger test")
-}
-
-**/
 
 
 
@@ -2932,24 +2884,26 @@ func getUserByAlertURL(AlertURL string) (utils.User, error) {
 	return user, nil
 }
 
+
+
 func getOBSDataByAlertURL(AlertURL string) (utils.OBSDataStruct, error) {
-	user, err := getUserByAlertURL(AlertURL)
-	if err != nil {
-		log.Println("Couldn't get user,", err)
-	}
-	var obsData utils.OBSDataStruct
-	//var alertURL sql.NullString // use sql.NullString for the "links" and "dono_gif" fields
-	row := db.QueryRow("SELECT gif_name, mp3_name, `message`, needed, sent FROM obs WHERE user_id=?", user.UserID)
+    user, err := getUserByAlertURL(AlertURL)
+    if err != nil {
+        return utils.OBSDataStruct{}, fmt.Errorf("getUserByAlertURL failed: %w", err)
+    }
 
-	err = row.Scan(&obsData.FilenameGIF, &obsData.FilenameMP3, &obsData.Message, &obsData.Needed, &obsData.Sent)
-	if err != nil {
-		log.Println("Couldn't get obsData,", err)
-		return obsData, err
-	}
+    var obsData utils.OBSDataStruct
+    row := db.QueryRow("SELECT gif_name, mp3_name, `message`, needed, sent FROM obs WHERE user_id=?", user.UserID)
 
-	return obsData, nil
+    err = row.Scan(&obsData.FilenameGIF, &obsData.FilenameMP3, &obsData.Message, &obsData.Needed, &obsData.Sent)
+    if err != nil {
+        return obsData, fmt.Errorf("obs row scan failed for user_id=%d: %w", user.UserID, err)
+    }
 
+    return obsData, nil
 }
+
+
 
 func getOBSDataByUserID(userID int) (utils.OBSDataStruct, error) {
 	var obsData utils.OBSDataStruct
@@ -3801,47 +3755,83 @@ func alertOBSHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error checking donation queue: %v\n", err)
 	}
 
-	if newDono {
-		fmt.Println("Donation displayed on OBS!")
-		a.DisplayToggle = ""
-	} else {
-		a.MediaURL = ""
-		a.DisplayToggle = "display: none;"
-		a.Refresh = 3
-	}
-	err = alertTemplate.Execute(w, a)
+    if newDono {
+        // Calculate USD value for the current donation
+        usdPrice := utils.GetSolanaUSDPrice()
+        if a.Amount > 0 && usdPrice > 0 {
+            a.USDAmount = a.Amount * usdPrice
+        }
+
+        fmt.Println("Donation displayed on OBS!")
+        a.DisplayToggle = ""
+        
+        } else {
+            a.MediaURL = ""
+            a.DisplayToggle = "display: none;"
+            a.Refresh = 3
+    }	
+    err = alertTemplate.Execute(w, a)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func progressbarOBSHandler(w http.ResponseWriter, r *http.Request) {
-	value := r.URL.Query().Get("value")
-	obsData, err := getOBSDataByAlertURL(value)
 
-	if err != nil {
-		log.Println(err)
-		err_ := indexTemplate.Execute(w, nil)
-		return
-		if err_ != nil {
-			http.Error(w, err_.Error(), http.StatusInternalServerError)
-			return
-		}
+
+/* apiProgressHandler -- Reliabley interface with OBS dono bar */
+func apiProgressHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	value := r.URL.Query().Get("value")
+	log.Printf("[Progress] API called with value=%q", value)
+
+	if value == "" {
+		value = "default"
 	}
 
-	/*log.Println("Progress bar message:", obsData.Message)
-	log.Println("Progress bar needed:", obsData.Needed)
-	log.Println("Progress bar sent:", obsData.Sent)*/
+	obsData, err := getOBSDataByAlertURL(value)
+	if err != nil {
+		log.Printf("[Progress] ERROR: %v", err)
+		json.NewEncoder(w).Encode(map[string]any{
+			"sent":    0,
+			"needed":  50,
+			"message": "Goal in progress",
+		})
+		return
+	}
+
+	log.Printf("[Progress] SUCCESS → sent=%.2f needed=%.2f message=%q", 
+		obsData.Sent, obsData.Needed, obsData.Message)
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"sent":    obsData.Sent,
+		"needed":  obsData.Needed,
+		"message": obsData.Message,
+	})
+}
+
+
+
+func progressbarOBSHandler(w http.ResponseWriter, r *http.Request) {
+	value := r.URL.Query().Get("value")
+
+	obsData, err := getOBSDataByAlertURL(value)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Progress data not found", http.StatusNotFound)
+		return
+	}
 
 	pb.Message = obsData.Message
 	pb.Needed = obsData.Needed
 	pb.Sent = obsData.Sent
 
-	err = progressbarTemplate.Execute(w, pb)
-	if err != nil {
+	if err := progressbarTemplate.Execute(w, pb); err != nil {
 		fmt.Println(err)
 	}
 }
+
+
 
 func cryptosStructToJSONString(s utils.CryptosEnabled) string {
 	bytes, err := json.Marshal(s)
@@ -3852,6 +3842,8 @@ func cryptosStructToJSONString(s utils.CryptosEnabled) string {
 	return string(bytes)
 }
 
+
+
 func cryptosJsonStringToStruct(jsonStr string) utils.CryptosEnabled {
 	var s utils.CryptosEnabled
 	err := json.Unmarshal([]byte(jsonStr), &s)
@@ -3861,6 +3853,8 @@ func cryptosJsonStringToStruct(jsonStr string) utils.CryptosEnabled {
 	}
 	return s
 }
+
+
 
 func cryptoSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
@@ -3972,6 +3966,8 @@ func cryptoSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+
 func errorHandler(w http.ResponseWriter, r *http.Request, header, subheader, message string) {
 	if r.Method == http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -4001,6 +3997,8 @@ func errorHandler(w http.ResponseWriter, r *http.Request, header, subheader, mes
 	}
 }
 
+
+
 func tosHandler(w http.ResponseWriter, r *http.Request) {
 	// Ignore requests for the favicon
 	if r.URL.Path == "/favicon.ico" {
@@ -4015,6 +4013,8 @@ func tosHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+
+
 func overflowHandler(w http.ResponseWriter, r *http.Request) {
 	err := overflowTemplate.Execute(w, nil)
 	if err != nil {
@@ -4023,6 +4023,8 @@ func overflowHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+
 
 func getIPAddress(r *http.Request) string {
 	ip := r.Header.Get("X-Real-IP")
@@ -4037,14 +4039,14 @@ func getIPAddress(r *http.Request) string {
 	return ip
 }
 
-    func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
+func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
         
-        err := indexTemplate.Execute(w, nil)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
+    err := indexTemplate.Execute(w, nil)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
     }
+}
 
     func indexHandler(w http.ResponseWriter, r *http.Request) {
 

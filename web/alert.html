@@ -198,7 +198,7 @@
     <div style="text-align: center; padding-top: 8px; margin-bottom: 12px;">
       <h1 style="margin: 0; padding: 0; font-size: 1.05em;">
         <beginquote>
-          <b style="margin-right: 10px">{{.Name}}</b> sent <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
+          <b style="margin-right: 10px">DONATION!</b> | <b style="margin-left: 10px">${{printf "%.2f" .USDAmount}} -- {{.Amount}}{{.Currency}}</b>
         </beginquote>
       </h1>
     </div>
@@ -332,23 +332,29 @@ window.onload = function() {
     }
 }
 
+
 function speak(text) {
+  console.log('[TTS] speak() called with:', text);
+
   if (!('speechSynthesis' in window)) {
-    console.warn('Web Speech API not available in this browser/OBS instance');
+    console.warn('[TTS] Web Speech API not available in this environment');
     return;
   }
 
   const synth = window.speechSynthesis;
 
   function doSpeak() {
-    synth.cancel(); // clear any queued speech (common OBS fix)
-
     const voices = synth.getVoices();
+    console.log('[TTS] Available voices:', voices.length);
 
-    // Cross-platform voice selection (no more hard Windows dependency)
-    // 1. Try Microsoft David if it exists (Windows)
-    // 2. Any English voice
-    // 3. First available voice as last resort
+    if (voices.length === 0) {
+      console.warn('[TTS] No voices available on this system/browser. Skipping TTS.');
+      return; // ← prevents the synthesis-failed error
+    }
+
+    synth.cancel();
+
+    // Prefer Microsoft David, then any English voice
     let selectedVoice = voices.find(v => v.name.includes('Microsoft David')) ||
                         voices.find(v => v.lang && v.lang.startsWith('en')) ||
                         voices[0];
@@ -359,10 +365,12 @@ function speak(text) {
     utterance.pitch = 1.0;
     utterance.volume = 0.9;
 
+    utterance.onend = () => console.log('[TTS] Finished');
+    utterance.onerror = (e) => console.error('[TTS] Error:', e.error);
+
     synth.speak(utterance);
   }
 
-  // Voices load asynchronously in most browsers
   if (synth.getVoices().length === 0) {
     synth.onvoiceschanged = doSpeak;
   } else {
