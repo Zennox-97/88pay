@@ -15,6 +15,8 @@ users.db
 etherscan_api
 logfile.txt
 *.swp
+last_sigs.json
+*.json
 
 users/
 users_bak/
