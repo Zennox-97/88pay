@@ -53,7 +53,7 @@ var NameMaxChar int = 25
 var starting_port int = 28088
 
 // Default page when loading "127.0.0.1:8900"
-var host_url string = "http://127.0.0.1:8900/login"
+var host_url string = "http://127.0.0.1:8900/"
 
 var addressSliceSolana []utils.AddressSolana
 
@@ -268,6 +268,8 @@ func donationsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+
 func main() {
 
 	// Open the log file in append mode, create it if it doesn't exist
@@ -309,289 +311,297 @@ func main() {
 		panic(err)
 	}
 
+    // createNewQueueEntry | try this spot first
+    utils.CreateQueueEntry = createNewQueueEntry
+    utils.GlobalUsers = globalUsers
+    utils.DB = db
+
 	go startWallets()
 
     // Set up callback for new SOL donations with memo support
-	utils.SetSolanaDonationCallback(ProcessNewSolanaDonation)
+        //utils.SetSolanaDonationCallback(ProcessNewSolDonation)
 
-	time.Sleep(5 * time.Second)
-	log.Println("Starting server")
+        time.Sleep(5 * time.Second)
+        log.Println("Starting server")
 
-	setupRoutes()
+        setupRoutes()
 
-	time.Sleep(2 * time.Second)
-	// Schedule a function to run fetchExchangeRates every three minutes
-	go fetchExchangeRates()
-	go checkDonos()
-	go checkPendingAccounts()
-	go checkBillingAccounts()
+        time.Sleep(2 * time.Second)
+        // Schedule a function to run fetchExchangeRates every three minutes
+        go fetchExchangeRates()
+        go checkDonos()
+        go checkPendingAccounts()
+        go checkBillingAccounts()
 
-	go checkAccountBillings()
+        go checkAccountBillings()
 
-	a.Refresh = 10
-	pb.Refresh = 1
-	obsData = getObsData(db, 1)
-	inviteCodeMap = getAllCodes()
-	setServerVars()
-	err = http.ListenAndServe(":8900", nil)
-	if err != nil {
-		panic(err)
-	}
+        a.Refresh = 10
+        pb.Refresh = 1
+        obsData = getObsData(db, 1)
+        inviteCodeMap = getAllCodes()
+        setServerVars()
+        err = http.ListenAndServe(":8900", nil)
+        if err != nil {
+            panic(err)
+        }
 
-}
+    }
 
-func updateCryptosHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
+    func updateCryptosHandler(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
 
-	body, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
-		return
-	}
-	defer r.Body.Close()
+        body, err := ioutil.ReadAll(r.Body)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Failed to read request body: %v", err), http.StatusBadRequest)
+            return
+        }
+        defer r.Body.Close()
 
-	var updateRequest utils.UpdateCryptosRequest
-	err = json.Unmarshal(body, &updateRequest)
-	if err != nil {
-		http.Error(w, fmt.Sprintf("Failed to parse request body: %v", err), http.StatusBadRequest)
-		return
-	}
+        var updateRequest utils.UpdateCryptosRequest
+        err = json.Unmarshal(body, &updateRequest)
+        if err != nil {
+            http.Error(w, fmt.Sprintf("Failed to parse request body: %v", err), http.StatusBadRequest)
+            return
+        }
 
-	cookie, err := r.Cookie("session_token")
-	if err != nil {
-		fmt.Println(err)
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
+        cookie, err := r.Cookie("session_token")
+        if err != nil {
+            fmt.Println(err)
+            http.Redirect(w, r, "/login", http.StatusSeeOther)
+            return
+        }
 
-	user, valid := getUserBySessionCached(cookie.Value)
-	if !valid {
-		http.Redirect(w, r, "/login", http.StatusSeeOther)
-		return
-	}
+        user, valid := getUserBySessionCached(cookie.Value)
+        if !valid {
+            http.Redirect(w, r, "/login", http.StatusSeeOther)
+            return
+        }
 
-	userID, err := strconv.Atoi(updateRequest.UserID)
+        userID, err := strconv.Atoi(updateRequest.UserID)
 
-	log.Println(userID, user.UserID)
+        log.Println(userID, user.UserID)
 
-	if userID == user.UserID {
-		user.CryptosEnabled = mapToCryptosEnabled(updateRequest.SelectedCryptos)
-		if user.CryptosEnabled.XMR && !user.WalletUploaded {
-			user.CryptosEnabled.XMR = false
-		}
-		log.Println(user.CryptosEnabled)
-		err = updateUser(user)
-		if err != nil {
-			log.Println(err)
-		}
-	}
+        if userID == user.UserID {
+            user.CryptosEnabled = mapToCryptosEnabled(updateRequest.SelectedCryptos)
+            if user.CryptosEnabled.XMR && !user.WalletUploaded {
+                user.CryptosEnabled.XMR = false
+            }
+            log.Println(user.CryptosEnabled)
+            err = updateUser(user)
+            if err != nil {
+                log.Println(err)
+            }
+        }
 
-	w.WriteHeader(http.StatusOK)
-}
+        w.WriteHeader(http.StatusOK)
+    }
 
-func mapToCryptosEnabled(selectedCryptos map[string]bool) utils.CryptosEnabled {
-	cryptosEnabled := utils.CryptosEnabled{}
-	cryptosEnabled.XMR = selectedCryptos["monero"]
-	cryptosEnabled.SOL = selectedCryptos["solana"]
-	cryptosEnabled.ETH = selectedCryptos["ethereum"]
-	cryptosEnabled.PAINT = selectedCryptos["paint"]
-	cryptosEnabled.HEX = selectedCryptos["hex"]
-	cryptosEnabled.MATIC = selectedCryptos["matic"]
-	cryptosEnabled.BUSD = selectedCryptos["busd"]
-	cryptosEnabled.SHIB = selectedCryptos["shiba_inu"]
-	cryptosEnabled.PNK = selectedCryptos["pnk"]
+    func mapToCryptosEnabled(selectedCryptos map[string]bool) utils.CryptosEnabled {
+        cryptosEnabled := utils.CryptosEnabled{}
+        cryptosEnabled.XMR = selectedCryptos["monero"]
+        cryptosEnabled.SOL = selectedCryptos["solana"]
+        cryptosEnabled.ETH = selectedCryptos["ethereum"]
+        cryptosEnabled.PAINT = selectedCryptos["paint"]
+        cryptosEnabled.HEX = selectedCryptos["hex"]
+        cryptosEnabled.MATIC = selectedCryptos["matic"]
+        cryptosEnabled.BUSD = selectedCryptos["busd"]
+        cryptosEnabled.SHIB = selectedCryptos["shiba_inu"]
+        cryptosEnabled.PNK = selectedCryptos["pnk"]
 
-	// Return the populated CryptosEnabled struct
-	return cryptosEnabled
-}
-func setupRoutes() {
-	http.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/style.css")
-	})
+        // Return the populated CryptosEnabled struct
+        return cryptosEnabled
+    }
+    func setupRoutes() {
+        http.HandleFunc("/style.css", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/style.css")
+        })
 
-	http.HandleFunc("/xmr.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/xmr.svg")
-	})
+        http.HandleFunc("/xmr.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/xmr.svg")
+        })
 
-	http.HandleFunc("/bignumber.js", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/js/bignumber.js")
-	})
+        http.HandleFunc("/bignumber.js", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/js/bignumber.js")
+        })
 
-	http.HandleFunc("/checkmark.png", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/xmr.png")
-	})
+        http.HandleFunc("/checkmark.png", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/xmr.png")
+        })
 
-	http.HandleFunc("/fcash.png", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/fcash.png")
-	})
+        http.HandleFunc("/fcash.png", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/fcash.png")
+        })
 
-	http.HandleFunc("/indexfcash.png", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/indexfcash.png")
-	})
+        http.HandleFunc("/indexfcash.png", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/indexfcash.png")
+        })
 
-	http.HandleFunc("/loader.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/loader.svg")
-	})
+        http.HandleFunc("/loader.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/loader.svg")
+        })
 
-	http.HandleFunc("/eth.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/eth.svg")
-	})
+        http.HandleFunc("/eth.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/eth.svg")
+        })
 
-	http.HandleFunc("/sol.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/sol.svg")
-	})
+        http.HandleFunc("/sol.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/sol.svg")
+        })
 
-	http.HandleFunc("/busd.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/busd.svg")
-	})
+        http.HandleFunc("/busd.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/busd.svg")
+        })
 
-	http.HandleFunc("/hex.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/hex.svg")
-	})
+        http.HandleFunc("/hex.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/hex.svg")
+        })
 
-	http.HandleFunc("/matic.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/matic.svg")
-	})
+        http.HandleFunc("/matic.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/matic.svg")
+        })
 
-	http.HandleFunc("/paint.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/paint.svg")
-	})
+        http.HandleFunc("/paint.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/paint.svg")
+        })
 
-	http.HandleFunc("/pnk.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/pnk.svg")
-	})
+        http.HandleFunc("/pnk.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/pnk.svg")
+        })
 
-	http.HandleFunc("/shiba_inu.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/shiba_inu.svg")
-	})
+        http.HandleFunc("/shiba_inu.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/shiba_inu.svg")
+        })
 
-	http.HandleFunc("/tether.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/tether.svg")
-	})
+        http.HandleFunc("/tether.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/tether.svg")
+        })
 
-	http.HandleFunc("/usdc.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/usdc.svg")
-	})
+        http.HandleFunc("/usdc.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/usdc.svg")
+        })
 
-	http.HandleFunc("/wbtc.svg", func(w http.ResponseWriter, r *http.Request) {
-		http.ServeFile(w, r, "web/wbtc.svg")
-	})
+        http.HandleFunc("/wbtc.svg", func(w http.ResponseWriter, r *http.Request) {
+            http.ServeFile(w, r, "web/wbtc.svg")
+        })
 
-	http.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir("web/obs/media/"))))
-	http.HandleFunc("/users/", handleUsers)
+        http.Handle("/media/", http.StripPrefix("/media/", http.FileServer(http.Dir("web/obs/media/"))))
+        http.HandleFunc("/users/", handleUsers)
+        http.HandleFunc("/api/progress", apiProgressHandler)    // put apiProgressHandler call here
 
-	routes_ = []Route_{
-		{"/updatecryptos", updateCryptosHandler},
-		{"/update-links", updateLinksHandler},
-		{"/check_donation_status/", checkDonationStatusHandler},
-		{"/donations", donationsHandler},
-		{"/", indexHandler},
-	//	{"/termsofservice", tosHandler},
-	//	{"/pay", paymentHandler},
-		{"/alert", alertOBSHandler},
-		{"/viewdonos", viewDonosHandler},
-		{"/replaydono", replayDonoHandler},
-		{"/progressbar", progressbarOBSHandler},
-		{"/login", loginHandler},
-		{"/incorrect_login", incorrectLoginHandler},
-		{"/user", userHandler},
-		{"/userobs", userOBSHandler},
-		{"/logout", logoutHandler},
-		{"/changepassword", changePasswordHandler},
-		{"/changeuser", changeUserHandler},
-	//	{"/register", registerUserHandler},
-	//	{"/newaccount", newAccountHandler},
-		{"/overflow", overflowHandler},
-	//	{"/billing", accountBillingHandler},
-		{"/changeusermonero", changeUserMoneroHandler},
-		{"/usermanager", allUsersHandler},
-		{"/refresh", refreshHandler},
-		{"/testdonation", testDonoHandler},
-	//	{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
-	//	{"/generatecodes", generateCodesHandler},
-		{"/cryptosettings", cryptoSettingsHandler},
-	}
+        log.Println(">>> /api/progress route REGISTERED successfully")
 
-	for _, route_ := range routes_ {
-		http.HandleFunc(route_.Path, route_.Handler)
-	}
+        routes_ = []Route_{
+            {"/updatecryptos", updateCryptosHandler},
+            {"/update-links", updateLinksHandler},
+            {"/check_donation_status/", checkDonationStatusHandler},
+            {"/donations", donationsHandler},
+            {"/", indexHandler},
+        //	{"/termsofservice", tosHandler},
+        //	{"/pay", paymentHandler},
+            {"/alert", alertOBSHandler},
+            {"/viewdonos", viewDonosHandler},
+            {"/replaydono", replayDonoHandler},
+            {"/progressbar", progressbarOBSHandler},
+            {"/login", loginHandler},
+            {"/incorrect_login", incorrectLoginHandler},
+            {"/user", userHandler},
+            {"/userobs", userOBSHandler},
+            {"/logout", logoutHandler},
+            {"/changepassword", changePasswordHandler},
+            {"/changeuser", changeUserHandler},
+        //	{"/register", registerUserHandler},
+        //	{"/newaccount", newAccountHandler},
+            {"/overflow", overflowHandler},
+        //	{"/billing", accountBillingHandler},
+            {"/changeusermonero", changeUserMoneroHandler},
+            {"/usermanager", allUsersHandler},
+            {"/refresh", refreshHandler},
+            {"/testdonation", testDonoHandler},
+        //	{"/toggleUserRegistrations", toggleUserRegistrationsHandler},
+        //	{"/generatecodes", generateCodesHandler},
+            {"/cryptosettings", cryptoSettingsHandler},
+        }
 
-	indexTemplate, _ = template.ParseFiles("web/index.html")
-	overflowTemplate, _ = template.ParseFiles("web/overflow.html")
-	tosTemplate, _ = template.ParseFiles("web/tos.html")
-	registerTemplate, _ = template.ParseFiles("web/new_account.html")
-	donationTemplate, _ = template.ParseFiles("web/donation.html")
-	footerTemplate, _ = template.ParseFiles("web/footer.html")
-	payTemplate, _ = template.ParseFiles("web/pay.html")
-	alertTemplate, _ = template.ParseFiles("web/alert.html")
-	accountPayTemplate, _ = template.ParseFiles("web/accountpay.html")
-	billPayTemplate, _ = template.ParseFiles("web/billpay.html")
-	userOBSTemplate, _ = template.ParseFiles("web/obs/settings.html")
-	progressbarTemplate, _ = template.ParseFiles("web/obs/progressbar.html")
-	loginTemplate, _ = template.ParseFiles("web/login.html")
-	incorrectLoginTemplate, _ = template.ParseFiles("web/incorrect_login.html")
-	userTemplate, _ = template.ParseFiles("web/user.html")
-	cryptoSettingsTemplate, _ = template.ParseFiles("web/cryptoselect.html")
-	logoutTemplate, _ = template.ParseFiles("web/logout.html")
-	incorrectPasswordTemplate, _ = template.ParseFiles("web/password_change_failed.html")
-}
+        for _, route_ := range routes_ {
+            http.HandleFunc(route_.Path, route_.Handler)
+        }
 
-func handleUsers(w http.ResponseWriter, r *http.Request) {
-	if strings.Contains(r.URL.Path, "/monero") {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
+        indexTemplate, _ = template.ParseFiles("web/index.html")
+        overflowTemplate, _ = template.ParseFiles("web/overflow.html")
+        tosTemplate, _ = template.ParseFiles("web/tos.html")
+        registerTemplate, _ = template.ParseFiles("web/new_account.html")
+        donationTemplate, _ = template.ParseFiles("web/donation.html")
+        footerTemplate, _ = template.ParseFiles("web/footer.html")
+        payTemplate, _ = template.ParseFiles("web/pay.html")
+        alertTemplate, _ = template.ParseFiles("web/alert.html")
+        accountPayTemplate, _ = template.ParseFiles("web/accountpay.html")
+        billPayTemplate, _ = template.ParseFiles("web/billpay.html")
+        userOBSTemplate, _ = template.ParseFiles("web/obs/settings.html")
+        progressbarTemplate, _ = template.ParseFiles("web/obs/progressbar.html")
+        loginTemplate, _ = template.ParseFiles("web/login.html")
+        incorrectLoginTemplate, _ = template.ParseFiles("web/incorrect_login.html")
+        userTemplate, _ = template.ParseFiles("web/user.html")
+        cryptoSettingsTemplate, _ = template.ParseFiles("web/cryptoselect.html")
+        logoutTemplate, _ = template.ParseFiles("web/logout.html")
+        incorrectPasswordTemplate, _ = template.ParseFiles("web/password_change_failed.html")
+    }
 
-	// Serve the file or directory normally
-	http.StripPrefix("/users/", http.FileServer(http.Dir("users/"))).ServeHTTP(w, r)
-}
+    func handleUsers(w http.ResponseWriter, r *http.Request) {
+        if strings.Contains(r.URL.Path, "/monero") {
+            http.Redirect(w, r, "/", http.StatusSeeOther)
+            return
+        }
 
-func replayDonoHandler(w http.ResponseWriter, r *http.Request) {
+        // Serve the file or directory normally
+        http.StripPrefix("/users/", http.FileServer(http.Dir("users/"))).ServeHTTP(w, r)
+    }
 
-	if r.Method != http.MethodPost {
-		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-	user, valid := getLoggedInUser(w, r)
-	var donation utils.Donation
-	err := json.NewDecoder(r.Body).Decode(&donation)
-	if err != nil {
-		fmt.Printf("Error decoding JSON")
-		http.Error(w, "Error decoding JSON", http.StatusBadRequest)
-		return
-	}
+    func replayDonoHandler(w http.ResponseWriter, r *http.Request) {
 
-	// Process the donation information as needed
-	fmt.Printf("Received donation replay: %+v\n", donation)
+        if r.Method != http.MethodPost {
+            http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+            return
+        }
+        user, valid := getLoggedInUser(w, r)
+        var donation utils.Donation
+        err := json.NewDecoder(r.Body).Decode(&donation)
+        if err != nil {
+            fmt.Printf("Error decoding JSON")
+            http.Error(w, "Error decoding JSON", http.StatusBadRequest)
+            return
+        }
 
-	if valid {
-		replayDono(donation, user.UserID)
-	} else {
-		http.Error(w, "Invalid donation trying to be replayed", http.StatusBadRequest)
-		return
-	}
+        // Process the donation information as needed
+        fmt.Printf("Received donation replay: %+v\n", donation)
 
-	// Send response indicating success
-	w.WriteHeader(http.StatusOK)
-}
+        if valid {
+            replayDono(donation, user.UserID)
+        } else {
+            http.Error(w, "Invalid donation trying to be replayed", http.StatusBadRequest)
+            return
+        }
 
-func testDonoHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		return
-	}
-	user, valid := getLoggedInUser(w, r)
-	username := r.FormValue("username")
-	if valid && utils.CompareStringsLowercase(user.Username, username) {
-		donation := utils.Donation{
-			ID:              "123",
-			DonationName:    "John Doe",
-			DonationMessage: "Test message",
-			DonationMedia:   "",
-			USDValue:        "100",
-			AmountSent:      "5",
+        // Send response indicating success
+        w.WriteHeader(http.StatusOK)
+    }
+
+    func testDonoHandler(w http.ResponseWriter, r *http.Request) {
+        if r.Method != http.MethodPost {
+            return
+        }
+        user, valid := getLoggedInUser(w, r)
+        username := r.FormValue("username")
+        if valid && utils.CompareStringsLowercase(user.Username, username) {
+            donation := utils.Donation{
+                ID:              "123",
+                DonationName:    "John Doe",
+                DonationMessage: "Test message",
+                DonationMedia:   "",
+                USDValue:        "100",
+                AmountSent:      "5",
 			Crypto:          "XMR",
 		}
 
@@ -599,8 +609,58 @@ func testDonoHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+
+func ProcessNewSolDonation(addr string, sig string, amount int64, memo string) {
+    log.Println(">>> [DEBUG] ProcessNewSolDonation ENTERED")
+
+    var targetUserID int
+    for id := range globalUsers {
+        targetUserID = id
+        break
+    }
+    if targetUserID == 0 {
+        targetUserID = 1
+    }
+    log.Println(">>> [DEBUG] Using targetUserID =", targetUserID)
+
+    amountSOL := float64(amount) / 1_000_000_000.0
+    amountStr := fmt.Sprintf("%.6f", amountSOL)
+
+    message := memo
+    if strings.TrimSpace(message) == "" {
+        message = "Anonymous Solana donation"
+    }
+
+    log.Println(">>> [DEBUG] About to call createNewQueueEntry")
+
+    err := createNewQueueEntry(
+        db,
+        targetUserID,
+        addr,
+        "Solana Donor",
+        message,
+        amountStr,
+        "SOL",
+        0.0,
+        "",
+    )
+
+    if err != nil {
+        log.Printf(">>> [DEBUG] createNewQueueEntry FAILED: %v", err)
+        return
+    }
+
+    log.Println(">>> [DEBUG] createNewQueueEntry SUCCESS")
+
+    log.Printf("[SUCCESS] Real Solana donation queued for OBS → Solana Donor sent %s SOL | memo: %s",
+        amountStr, message)
+}
+
+
+
 func startWallets() {
-	printUserColumns()
+    printUserColumns()
 	users, err := getAllUsers()
 	if err != nil {
 		log.Fatalf("startWallet() error:", err)
@@ -638,22 +698,24 @@ func startWallets() {
 	
     /** 88 Pay banner and version number **/
     // 88 Pay build version and console banner here
-    fmt.Printf(strings.Repeat(redText("#"), 80))
     fmt.Printf("\n")
-    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf(strings.Repeat(redText("="), 80))
+    fmt.Printf("\n")
+    fmt.Printf(strings.Repeat(redText("="), 80))
     fmt.Printf("\n")
     fmt.Printf("\n")
+
     // big 88 text here
     big88 := []string{
 		"  ##########      ##########  ",
 		" ############    ############ ",
+		"#####    #####  #####    #####",
 		"####      ####  ####      ####",
-		"####      ####  ####      ####",
-		"####      ####  ####      ####",
+		"#####    #####  #####    #####",
 		" ############    ############ ",
+		"#####    #####  #####    #####",
 		"####      ####  ####      ####",
-		"####      ####  ####      ####",
-		"####      ####  ####      ####",
+		"#####    #####  #####    #####",
 		" ############    ############ ",
 		"  ##########      ##########  ",
 	}
@@ -680,22 +742,32 @@ func startWallets() {
 	}
 
     fmt.Printf("\n")
-    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf(strings.Repeat(redText("="), 80))
     fmt.Printf("\n")
-    fmt.Printf(strings.Repeat(redText("#"), 80))
+    fmt.Printf(strings.Repeat(redText("="), 80))
     fmt.Printf("\n")
+    
     /** End of banner and version **/
-    fmt.Printf("\n%s\n\n", redText("[88 Pay] - Version 0.1 Dev"))
-    for _, user := range users {
-		solWallets[user.UserID] = utils.SolWallet{
-			Address: user.SolAddress,
-			Amount:  0.00,
-		}
-	}
+    
+    fmt.Printf("\n%s\n\n", redText("[88Pay] - Version 0.1 Dev"))
+   
 
-	utils.SetSolWallets(solWallets)
-	go utils.StartMonitoringSolana()
+    for _, user := range users {
+        solWallets[user.UserID] = utils.SolWallet{
+            Address: user.SolAddress,
+            Amount:  0.00,
+        }
+    }
+
+    utils.SetSolWallets(solWallets)
+
+    // Register callback so real Solana txs create OBS alerts
+    utils.SetSolanaDonationCallback(ProcessNewSolDonation)
+
+    go utils.StartMonitoringSolana()
 }
+
+
 
 func checkValidSubscription(DateEnabled time.Time) bool {
 	oneMonthAhead := DateEnabled.AddDate(0, 1, 0)
@@ -706,6 +778,9 @@ func checkValidSubscription(DateEnabled time.Time) bool {
 	log.Println("checkValidSubscription() User not valid")
 	return false
 }
+
+
+
 
 func getLoggedInUser(w http.ResponseWriter, r *http.Request) (utils.User, bool) {
 	cookie, err := r.Cookie("session_token")
@@ -720,6 +795,9 @@ func getLoggedInUser(w http.ResponseWriter, r *http.Request) (utils.User, bool) 
 
 	return user, true
 }
+
+
+
 
 func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -768,35 +846,7 @@ func allUsersHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-/* Obsolete, commenting and imminent deletion
-func generateCodesHandler(w http.ResponseWriter, r *http.Request) {
-	if checkLoggedInAdmin(w, r) {
-		generateMoreInviteCodes(5)
-		http.Redirect(w, r, "/usermanager", http.StatusSeeOther)
-		allUsersHandler(w, r)
-	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
 
-}
-*/
-
-/*
-func toggleUserRegistrationsHandler(w http.ResponseWriter, r *http.Request) {
-
-	if checkLoggedInAdmin(w, r) {
-		PublicRegistrationsEnabled = !PublicRegistrationsEnabled
-		http.Redirect(w, r, "/usermanager", http.StatusSeeOther)
-		allUsersHandler(w, r)
-	} else {
-		http.Redirect(w, r, "/", http.StatusSeeOther)
-		return
-	}
-
-}
-
-*/
 
 func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	if checkLoggedInAdmin(w, r) {
@@ -805,6 +855,8 @@ func refreshHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	allUsersHandler(w, r)
 }
+
+
 
 func updateEnabledDate(userID int) error {
 	// Get the current time
@@ -818,6 +870,8 @@ func updateEnabledDate(userID int) error {
 
 	return nil
 }
+
+
 
 func getAllCodes() map[string]utils.InviteCode {
 
@@ -843,6 +897,8 @@ func getAllCodes() map[string]utils.InviteCode {
 	return inviteCodeMap
 
 }
+
+
 
 func getAllUsers() ([]utils.User, error) {
 	var users []utils.User
@@ -936,6 +992,8 @@ func getAllUsers() ([]utils.User, error) {
 	return users, nil
 }
 
+
+
 func getAllBilling() ([]utils.BillingData, error) {
 	var billings []utils.BillingData
 	rows, err := db.Query("SELECT * FROM billing")
@@ -971,6 +1029,8 @@ func getAllBilling() ([]utils.BillingData, error) {
 	return billings, nil
 }
 
+
+
 func getActiveETHUsers(db *sql.DB) ([]*utils.User, error) {
 	var users []*utils.User
 
@@ -997,6 +1057,8 @@ func getActiveETHUsers(db *sql.DB) ([]*utils.User, error) {
 	}
 	return users, nil
 }
+
+
 
 func getActiveXMRUsers(db *sql.DB) ([]*utils.User, error) {
 	var users []*utils.User
@@ -1026,6 +1088,8 @@ func getActiveXMRUsers(db *sql.DB) ([]*utils.User, error) {
 	return users, nil
 }
 
+
+
 func getUserCryptosEnabled(user utils.User) (utils.User, error) {
 
 	user.CryptosEnabled.XMR = false
@@ -1041,6 +1105,8 @@ func getUserCryptosEnabled(user utils.User) (utils.User, error) {
 	return user, nil
 
 }
+
+
 
 // get links for a user
 func getUserLinks(user utils.User) ([]utils.Link, error) {
@@ -1072,6 +1138,8 @@ func getUserLinks(user utils.User) ([]utils.Link, error) {
 	return links, nil
 }
 
+
+
 func setServerVars() {
 	log.Println("Starting.")
 	log.Println("		 ..")
@@ -1079,6 +1147,8 @@ func setServerVars() {
 	log.Println("------------ setServerVars()")
 	setMinDonos()
 }
+
+
 
 func createTestDono(user_id int, name string, curr string, message string, amount string, usdAmount float64, media_url string) {
 	valid, media_url_ := checkDonoForMediaUSDThreshold(media_url, usdAmount)
@@ -1097,6 +1167,8 @@ func createTestDono(user_id int, name string, curr string, message string, amoun
 	addDonoToDonoBar(amount, curr, user_id)
 }
 
+
+
 func replayDono(donation utils.Donation, userID int) {
 	valid, media_url_ := checkDonoForMediaUSDThreshold(donation.DonationMedia, convertToFloat64(donation.USDValue))
 
@@ -1110,6 +1182,8 @@ func replayDono(donation utils.Donation, userID int) {
 	}
 }
 
+
+
 func convertToFloat64(value string) float64 {
 	f, err := strconv.ParseFloat(value, 64)
 	if err != nil {
@@ -1117,6 +1191,8 @@ func convertToFloat64(value string) float64 {
 	}
 	return f
 }
+
+
 
 // extractVideoID extracts the video ID from a YouTube URL
 func extractVideoID(url string) string {
@@ -1129,6 +1205,8 @@ func extractVideoID(url string) string {
 	}
 	return videoID
 }
+
+
 
 func viewDonosHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -1222,6 +1300,8 @@ func viewDonosHandler(w http.ResponseWriter, r *http.Request) {
 	tpl.Execute(w, data)
 }
 
+
+
 func setUserMinDonos(user utils.User) utils.User {
 	var err error
 	user.MinSol, _ = strconv.ParseFloat(fmt.Sprintf("%.5f", (float64(user.MinDono)/prices.Solana)), 64)
@@ -1243,11 +1323,15 @@ func setUserMinDonos(user utils.User) utils.User {
 	return user
 }
 
+
+
 func setMinDonos() {
 	for i := range globalUsers {
 		globalUsers[i] = setUserMinDonos(globalUsers[i])
 	}
 }
+
+
 
 func fetchExchangeRates() {
 	for {
@@ -1265,12 +1349,16 @@ func fetchExchangeRates() {
 
 }
 
+
+
 func createNewEthDono(name string, message string, mediaURL string, amountNeeded float64, cryptoCode string, encrypted_ip string) utils.SuperChat {
 	new_dono := utils.CreatePendingDono(name, message, mediaURL, amountNeeded, cryptoCode, encrypted_ip)
 	pending_donos = utils.AppendPendingDono(pending_donos, new_dono)
 
 	return new_dono
 }
+
+
 
 func startMoneroWallet(portInt, userID int, user utils.User) {
 	portID := getPortID(xmrWallets, userID)
@@ -1321,6 +1409,8 @@ func startMoneroWallet(portInt, userID int, user utils.User) {
 	updateUser(user)
 }
 
+
+
 func CheckMoneroPort(userID int) bool {
 	payload := strings.NewReader(`{"jsonrpc":"2.0","id":"0","method":"make_integrated_address"}`)
 	portID := getPortID(xmrWallets, userID)
@@ -1356,6 +1446,8 @@ func CheckMoneroPort(userID int) bool {
 	return true
 }
 
+
+
 func stopMoneroWallet(user utils.User) {
 	portID := getPortID(xmrWallets, user.UserID)
 
@@ -1383,6 +1475,8 @@ func stopMoneroWallet(user utils.User) {
 	// Print the output of the command
 	fmt.Println(string(output))
 }
+
+
 
 func checkDonos() {
 	for {
@@ -1423,6 +1517,8 @@ func checkDonos() {
 	}
 }
 
+
+
 func getAdminETHAdd() string {
 	user, validUser := getUserByUsernameCached(username)
 
@@ -1432,6 +1528,8 @@ func getAdminETHAdd() string {
 
 	return user.EthAddress
 }
+
+
 
 func checkBillingAccounts() {
 	for {
@@ -1475,6 +1573,8 @@ func checkBillingAccounts() {
 		time.Sleep(time.Duration(30) * time.Second)
 	}
 }
+
+
 
 func renewUserSubscription(user utils.User) {
 	user.BillingData.Enabled = true
@@ -2784,24 +2884,26 @@ func getUserByAlertURL(AlertURL string) (utils.User, error) {
 	return user, nil
 }
 
+
+
 func getOBSDataByAlertURL(AlertURL string) (utils.OBSDataStruct, error) {
-	user, err := getUserByAlertURL(AlertURL)
-	if err != nil {
-		log.Println("Couldn't get user,", err)
-	}
-	var obsData utils.OBSDataStruct
-	//var alertURL sql.NullString // use sql.NullString for the "links" and "dono_gif" fields
-	row := db.QueryRow("SELECT gif_name, mp3_name, `message`, needed, sent FROM obs WHERE user_id=?", user.UserID)
+    user, err := getUserByAlertURL(AlertURL)
+    if err != nil {
+        return utils.OBSDataStruct{}, fmt.Errorf("getUserByAlertURL failed: %w", err)
+    }
 
-	err = row.Scan(&obsData.FilenameGIF, &obsData.FilenameMP3, &obsData.Message, &obsData.Needed, &obsData.Sent)
-	if err != nil {
-		log.Println("Couldn't get obsData,", err)
-		return obsData, err
-	}
+    var obsData utils.OBSDataStruct
+    row := db.QueryRow("SELECT gif_name, mp3_name, `message`, needed, sent FROM obs WHERE user_id=?", user.UserID)
 
-	return obsData, nil
+    err = row.Scan(&obsData.FilenameGIF, &obsData.FilenameMP3, &obsData.Message, &obsData.Needed, &obsData.Sent)
+    if err != nil {
+        return obsData, fmt.Errorf("obs row scan failed for user_id=%d: %w", user.UserID, err)
+    }
 
+    return obsData, nil
 }
+
+
 
 func getOBSDataByUserID(userID int) (utils.OBSDataStruct, error) {
 	var obsData utils.OBSDataStruct
@@ -3653,47 +3755,83 @@ func alertOBSHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("Error checking donation queue: %v\n", err)
 	}
 
-	if newDono {
-		fmt.Println("Showing NEW DONO!")
-		a.DisplayToggle = ""
-	} else {
-		a.MediaURL = ""
-		a.DisplayToggle = "display: none;"
-		a.Refresh = 3
-	}
-	err = alertTemplate.Execute(w, a)
+    if newDono {
+        // Calculate USD value for the current donation
+        usdPrice := utils.GetSolanaUSDPrice()
+        if a.Amount > 0 && usdPrice > 0 {
+            a.USDAmount = a.Amount * usdPrice
+        }
+
+        fmt.Println("Donation displayed on OBS!")
+        a.DisplayToggle = ""
+        
+        } else {
+            a.MediaURL = ""
+            a.DisplayToggle = "display: none;"
+            a.Refresh = 3
+    }	
+    err = alertTemplate.Execute(w, a)
 	if err != nil {
 		fmt.Println(err)
 	}
 }
 
-func progressbarOBSHandler(w http.ResponseWriter, r *http.Request) {
-	value := r.URL.Query().Get("value")
-	obsData, err := getOBSDataByAlertURL(value)
 
-	if err != nil {
-		log.Println(err)
-		err_ := indexTemplate.Execute(w, nil)
-		return
-		if err_ != nil {
-			http.Error(w, err_.Error(), http.StatusInternalServerError)
-			return
-		}
+
+/* apiProgressHandler -- Reliabley interface with OBS dono bar */
+func apiProgressHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+
+	value := r.URL.Query().Get("value")
+	log.Printf("[Progress] API called with value=%q", value)
+
+	if value == "" {
+		value = "default"
 	}
 
-	/*log.Println("Progress bar message:", obsData.Message)
-	log.Println("Progress bar needed:", obsData.Needed)
-	log.Println("Progress bar sent:", obsData.Sent)*/
+	obsData, err := getOBSDataByAlertURL(value)
+	if err != nil {
+		log.Printf("[Progress] ERROR: %v", err)
+		json.NewEncoder(w).Encode(map[string]any{
+			"sent":    0,
+			"needed":  50,
+			"message": "Goal in progress",
+		})
+		return
+	}
+
+	log.Printf("[Progress] SUCCESS → sent=%.2f needed=%.2f message=%q", 
+		obsData.Sent, obsData.Needed, obsData.Message)
+
+	json.NewEncoder(w).Encode(map[string]any{
+		"sent":    obsData.Sent,
+		"needed":  obsData.Needed,
+		"message": obsData.Message,
+	})
+}
+
+
+
+func progressbarOBSHandler(w http.ResponseWriter, r *http.Request) {
+	value := r.URL.Query().Get("value")
+
+	obsData, err := getOBSDataByAlertURL(value)
+	if err != nil {
+		log.Println(err)
+		http.Error(w, "Progress data not found", http.StatusNotFound)
+		return
+	}
 
 	pb.Message = obsData.Message
 	pb.Needed = obsData.Needed
 	pb.Sent = obsData.Sent
 
-	err = progressbarTemplate.Execute(w, pb)
-	if err != nil {
+	if err := progressbarTemplate.Execute(w, pb); err != nil {
 		fmt.Println(err)
 	}
 }
+
+
 
 func cryptosStructToJSONString(s utils.CryptosEnabled) string {
 	bytes, err := json.Marshal(s)
@@ -3704,6 +3842,8 @@ func cryptosStructToJSONString(s utils.CryptosEnabled) string {
 	return string(bytes)
 }
 
+
+
 func cryptosJsonStringToStruct(jsonStr string) utils.CryptosEnabled {
 	var s utils.CryptosEnabled
 	err := json.Unmarshal([]byte(jsonStr), &s)
@@ -3713,6 +3853,8 @@ func cryptosJsonStringToStruct(jsonStr string) utils.CryptosEnabled {
 	}
 	return s
 }
+
+
 
 func cryptoSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_token")
@@ -3824,6 +3966,8 @@ func cryptoSettingsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+
+
 func errorHandler(w http.ResponseWriter, r *http.Request, header, subheader, message string) {
 	if r.Method == http.MethodPost {
 		http.Redirect(w, r, "/", http.StatusSeeOther)
@@ -3853,6 +3997,8 @@ func errorHandler(w http.ResponseWriter, r *http.Request, header, subheader, mes
 	}
 }
 
+
+
 func tosHandler(w http.ResponseWriter, r *http.Request) {
 	// Ignore requests for the favicon
 	if r.URL.Path == "/favicon.ico" {
@@ -3867,6 +4013,8 @@ func tosHandler(w http.ResponseWriter, r *http.Request) {
 
 }
 
+
+
 func overflowHandler(w http.ResponseWriter, r *http.Request) {
 	err := overflowTemplate.Execute(w, nil)
 	if err != nil {
@@ -3875,6 +4023,8 @@ func overflowHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 }
+
+
 
 func getIPAddress(r *http.Request) string {
 	ip := r.Header.Get("X-Real-IP")
@@ -3889,14 +4039,14 @@ func getIPAddress(r *http.Request) string {
 	return ip
 }
 
-    func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
+func redirectMainHandler(w http.ResponseWriter, r *http.Request) {
         
-        err := indexTemplate.Execute(w, nil)
-        if err != nil {
-            http.Error(w, err.Error(), http.StatusInternalServerError)
-            return
-        }
+    err := indexTemplate.Execute(w, nil)
+    if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
     }
+}
 
     func indexHandler(w http.ResponseWriter, r *http.Request) {
 
@@ -4005,17 +4155,20 @@ func getIPAddress(r *http.Request) string {
 			fmt.Println(err)
 		}
 	} else {
-		log.Println("username = ", username)
-		if username != "" {
-			errorHandler(w, r, "User not found", "didn't find a ferret account with that username", "No username was found.")
-			return
-		}
-		// If no username is present in the URL path, serve the indexTemplate
-		err := indexTemplate.Execute(w, nil)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
+	    log.Println("username = ", username)
+        if username != "" {
+            errorHandler(w, r,
+                "User not found",
+                "We couldn't find an account with that username.",
+                "No username was found.")
+            return
+        }
+        // serve index template for root or empty path
+        err := indexTemplate.Execute(w, nil)
+        if err != nil {
+            http.Error(w, err.Error(), http.StatusInternalServerError)
+            return	
+        }
 	}
 }
 
@@ -4040,7 +4193,7 @@ func checkDonoQueue(db *sql.DB, userID int) (bool, error) {
 		return false, err
 	}
 
-	fmt.Println("Showing notif:", name, ":", message)
+	//fmt.Println("Showing notif:", name, ":", message)         debug line for getting OBS alert success to display
 	// update the form in memory
 	a.Name = name
 	a.Message = message
@@ -4682,31 +4835,6 @@ func handleEthereumPayment(w http.ResponseWriter, s *utils.CryptoSuperChat, name
 	}
 }
 
-// ProcessNewSolanaDonation handles spontaneous donations + memo for TTS/alert
-func ProcessNewSolanaDonation(addr, sig string, amountLamports int64, memo string) {
-	amountSOL := float64(amountLamports) / 1_000_000_000
-
-	userID := getUserIDBySolAddress(addr)
-	if userID == 0 {
-		fmt.Printf("[!] Could not find user for SOL address: %s\n", addr)
-		return
-	}
-
-	message := memo
-	if message == "" {
-		message = "Anonymous Donation"
-	}
-
-	err := createNewQueueEntry(db, userID, addr, "Anonymous", message,
-		fmt.Sprintf("%.9f", amountSOL), "SOL",
-		getUSDValue(amountSOL, "SOL"), sig)
-
-	if err == nil {
-		fmt.Printf("[SUCCESS] SOL Donation Alert Queued! Amount: %.6f SOL | Memo: %s\n", amountSOL, message)
-	} else {
-		fmt.Printf("[ERROR] Failed to queue SOL donation: %v\n", err)
-	}
-}
 
 
 /*** SOLANA PROCESSOR - ADD MEMO PARSING SOMEWHER HERE ***/

@@ -5,9 +5,6 @@
 
 <title>OBS Alert</title>
 <style>
-  small{
-    zoom: 0.2;
-  }
   body {
     data-display-toggle="{{.DisplayToggle}}"
     background: #262b3b;
@@ -120,42 +117,123 @@
     98% {opacity:0;}
   }
 
+
+/* === OBS Alert Visual Polish (feature/obs-alert-css-overlay) === */
+.alert-visual {
+    position: relative;
+    width: 68%;
+    max-width: 620px;
+    margin: 15px auto;
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+[data-textpos="below"] .alert-visual {
+    position: relative;
+    width: 68%;
+    max-width: 620px;
+    margin: 15px auto;
+    border-radius: 12px;
+    overflow: visible;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+}
+
+#donation-gif {
+    display: block;
+    width: 100%;
+    max-height: 360px;
+    height: auto;
+    object-fit: contain;
+    background: #1a1f2e; /* fallback if gif fails */
+}
+
+.memo-overlay {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 86%;
+    max-height: 65%;
+    padding: 16px 22px;
+    margin: 0;
+    font-family: Arial, serif;
+    font-size: 32px;
+    line-height: 1.35;
+    color: #ffffff;
+    text-align: center;
+    background: rgba(38, 43, 59, 0.28);
+    border-radius: 8px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+    text-shadow: 
+      -1px -1px 0 #000000,
+      1px -1px 0 #000000,
+      -1px 1px 0 #000000,
+      1px 1px 0 #000000;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+    overflow-y: auto;
+}
+
+/* BELOW mode – text flows under the GIF, still centered */
+  [data-textpos="below"] .memo-overlay {
+    position: static !important;
+    transform: none !important;
+    top: auto !important;
+    left: auto !important;
+    display: block;
+    width: 70%;
+    max-width: 620px;
+    margin: 18px auto 0;
+    background: rgba(38, 43, 59, 0.85); /* tweak this while you play with bg */
+    box-shadow: 0 6px 18px rgba(0,0,0,0.5);
+  }
+
 </style>
 
 </head>
-  <body>
-    <div {{ if ne .MediaURL "" }}style="animation: fade-away-media {{.Refresh}}s;"{{ end }} >
-      <h1>
-        <div id="center1" style="display: flex; justify-content: center; align-items: center;">
-          <br>
-          <small><img src="{{.Userpath}}/gifs/default.gif"></small>
-          {{if eq .DisplayToggle "display: none;"}}
-          {{else}}
-          <a hidden>
-            <audio controls autoplay>
-              <source src="{{.Userpath}}/sounds/default.mp3" type="audio/mpeg">
-            </audio>
-          </a>
-          {{end}}
-          <beginquote>
-            <b style="margin-right: 10px">{{.Name}} </b> sent <b style="margin-left: 10px">{{.Amount}}{{.Currency}}</b>
-          </beginquote>
-        </div>
+<body>
+  <div {{ if ne .MediaURL "" }}style="animation: fade-away-media {{.Refresh}}s;"{{ end }} >
+    <!-- Amount + currency header (kept at top, prominent) -->
+    <div style="text-align: center; padding-top: 8px; margin-bottom: 12px;">
+      <h1 style="margin: 0; padding: 0; font-size: 1.05em;">
+        <beginquote>
+          <b style="margin-right: 10px">DONATION!</b> | <b style="margin-left: 10px">${{printf "%.2f" .USDAmount}} -- {{.Amount}}{{.Currency}}</b>
+        </beginquote>
       </h1>
-
-      <blockquote>{{.Message}}</blockquote>
     </div>
-    
-    {{ if ne .MediaURL "" }}
-    <div style="animation: fade-away-media-yt {{.Refresh}}s;">
-      <div class="centered-container">
-        <div class="player-container">
-          <div id="player"></div>
-        </div>
+
+    <!-- GIF + centered memo overlay -->
+    <div class="alert-visual">
+      <img id="donation-gif" src="{{.Userpath}}/gifs/default.gif" alt="Donation alert">
+      {{if .Message}}
+      <blockquote class="memo-overlay" id="memo-text">
+        {{.Message}}
+      </blockquote>
+      {{end}}
+    </div>
+  </div>
+
+  {{ if ne .MediaURL "" }}
+  <div style="animation: fade-away-media-yt {{.Refresh}}s;">
+    <div class="centered-container">
+      <div class="player-container">
+        <div id="player"></div>
       </div>
     </div>
-    {{ end }}
-  </body>
+  </div>
+  {{ end }}
+
+  <!-- Hidden default sound (unchanged) -->
+  {{if eq .DisplayToggle "display: none;"}}
+  {{else}}
+  <a hidden>
+    <audio controls autoplay>
+      <source src="{{.Userpath}}/sounds/default.mp3" type="audio/mpeg">
+    </audio>
+  </a>
+  {{end}}
+</body>
 </html>
 
 
@@ -189,6 +267,20 @@
       }
     });
   }
+
+// === Text position control via OBS Browser Source URL ===
+// Default = overlay (text on top of GIF).
+// Add ?textpos=below to the URL to switch to text under the GIF.
+const urlParams = new URLSearchParams(window.location.search);
+let textPos = (urlParams.get('textpos') || 'overlay').toLowerCase().trim();
+
+// Only accept the two supported modes. Anything else (typo, empty, old value) → overlay.
+if (textPos !== 'below') {
+  textPos = 'overlay';
+}
+
+document.body.dataset.textpos = textPos;
+
 
   // When the player is ready, start playing and unmute the video after 1 second
   function onPlayerReady(event) {
@@ -225,27 +317,82 @@
     refreshMeta.setAttribute('content', seconds);
   }
 
-  window.onload = function() {
-    if ("{{.DisplayToggle}}" !== "display: none;") {
-      speak("{{.Name}} sent {{.Amount}}{{.Currency}}. {{.Message}}")
+window.onload = function() {
+
+    const memoEl = document.getElementById('memo-text');
+        if (memoEl) {
+        // Small delay ensures layout + GIF are ready
+        setTimeout(function() {
+        fitTextToContainer(memoEl);
+        }, 80);
     }
-  }
+
+    if ("{{.DisplayToggle}}" !== "display: none;") {
+        speak("{{.Message}}")
+    }
+}
+
 
 function speak(text) {
-  if ('speechSynthesis' in window) {
-    const synth = window.speechSynthesis;
+  console.log('[TTS] speak() called with:', text);
+
+  if (!('speechSynthesis' in window)) {
+    console.warn('[TTS] Web Speech API not available in this environment');
+    return;
+  }
+
+  const synth = window.speechSynthesis;
+
+  function doSpeak() {
     const voices = synth.getVoices();
-    const selectedVoice = voices.find(voice => voice.name === 'Microsoft David Desktop - English (United States)');
-    const utterance = new SpeechSynthesisUtterance(decodeURIComponent(text));
-    utterance.voice = selectedVoice;
-    utterance.rate = 1.5;
-    utterance.pitch = 1;
-    utterance.volume = 0.8;
+    console.log('[TTS] Available voices:', voices.length);
+
+    if (voices.length === 0) {
+      console.warn('[TTS] No voices available on this system/browser. Skipping TTS.');
+      return; // ← prevents the synthesis-failed error
+    }
+
+    synth.cancel();
+
+    // Prefer Microsoft David, then any English voice
+    let selectedVoice = voices.find(v => v.name.includes('Microsoft David')) ||
+                        voices.find(v => v.lang && v.lang.startsWith('en')) ||
+                        voices[0];
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    if (selectedVoice) utterance.voice = selectedVoice;
+    utterance.rate = 1.4;
+    utterance.pitch = 1.0;
+    utterance.volume = 0.9;
+
+    utterance.onend = () => console.log('[TTS] Finished');
+    utterance.onerror = (e) => console.error('[TTS] Error:', e.error);
+
     synth.speak(utterance);
+  }
+
+  if (synth.getVoices().length === 0) {
+    synth.onvoiceschanged = doSpeak;
+  } else {
+    doSpeak();
   }
 }
 
 
+// Dynamically scale memo text based on actual rendered width (clean, no magic numbers)
+function fitTextToContainer(el, minFontSize = 20, maxFontSize = 38) {
+  if (!el || !el.parentElement) return;
+  const container = el.parentElement;
+  let fontSize = maxFontSize;
+  el.style.fontSize = fontSize + 'px';
+  el.style.whiteSpace = 'normal';
+
+  // Shrink until it fits comfortably (accounts for wrapping + actual font metrics)
+  while (el.scrollWidth > (container.clientWidth * 0.92) && fontSize > minFontSize) {
+    fontSize -= 0.8;
+    el.style.fontSize = fontSize + 'px';
+  }
+}
 
 </script>
 
