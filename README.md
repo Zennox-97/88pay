@@ -1,4 +1,4 @@
-# 88 Pay 0.5 BETA
+# 88 Pay BETA 1.0
 
 Free, self-hosted cryptocurrency donation service that interfaces with OBS.
 
@@ -46,6 +46,8 @@ For those new to crypto, provide the following steps somewhere on stream or in y
 1. Download Phantom Wallet
 2. Buy SOL using Phantom
 3. Send SOL to the streamers wallet address | Use the "Memo" field for custom TTS messages
+- Important! Supporters must manually sign their donations. For example:
+- "donation text -supporter_screenname"
 4. SOL transaction is picked up by 88Pay within 5-15 seconds and OBS alert is triggered.
 
 ## Features
