@@ -19,8 +19,10 @@ logfile.txt
 *.json
 last_sigs.json
 
-users/1
-users_bak/
+users/*
+!users/.gitkeep
+users_bak/*
+!users_bak/.gitkeep
 
 tmp/
 temp/

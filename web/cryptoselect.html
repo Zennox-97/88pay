@@ -29,22 +29,24 @@
 <div class="content">
 
     <br>
-    <b style="color: lightsteelblue;">Accepted Cryptos:</b>
+    <b style="color: lightsteelblue;">Enable Solana:</b>
     <table>
         <tr>
+            <!--
             <td>
                 <div style="display: flex; align-items: center;">
                     <input type="checkbox" id="monero" style="width: auto;" {{ if .CryptosEnabled.XMR }}checked{{ end }} {{ if not .WalletUploaded }}disabled{{ end }}>
                     <label for="monero">Monero</label>
 
                 </div>
-            </td>
+            </td> -->
             <td>
                 <div style="display: flex; align-items: center;">
                     <input type="checkbox" id="solana" style="width: auto;" {{ if .CryptosEnabled.SOL }}checked{{ end }}>
                     <label for="solana">Solana</label>
                 </div>
             </td>
+            <!--
             <td>
                 <div style="display: flex; align-items: center;">
                     <input type="checkbox" id="ethereum" style="width: auto;" {{ if .CryptosEnabled.ETH }}checked{{ end }}>
@@ -90,7 +92,7 @@
                     <input type="checkbox" id="pnk" style="width: auto;" {{ if .CryptosEnabled.PNK }}checked{{ end }}>
                     <label for="pnk">Kleros</label>
                 </div>
-            </td>
+            </td> -->
         </tr>
     </table>
     <input type="hidden" id="user_id" value="{{ .UserID }}">
@@ -100,9 +102,11 @@
     <br>
 
     <form method="POST" action="/changeuser">
+    <!--    cut out the ETH address, has no use currently
     <label for="ethereumAddress"><b style="color: lightsteelblue;">Ethereum Address:</b></label>
     <input type="text" id="ethereumAddress" name="ethereumAddress" placeholder="{{.EthAddress}}" value="{{.EthAddress}}">
-    <br>
+    
+    <br> -->
     <label for="solanaAddress"><b style="color: lightsteelblue;">Solana Address:</b></label>
     <input type="text" id="solanaAddress" name="solanaAddress" placeholder="{{.SolAddress}}" value="{{.SolAddress}}">
 
@@ -119,6 +123,7 @@
   </form>
     <hr>
     {{if not .WalletUploaded}}
+    <!-- cut out Monero stuff from crypto page | keep commented code incase of crash
         <form method="POST" action="/changeusermonero" enctype="multipart/form-data">
           <label for="moneroWallet"><b style="color: lightsteelblue;">View-Only Monero Wallet:</b></label>
           <input type="file" id="moneroWallet" name="moneroWallet">
@@ -133,7 +138,7 @@
           <input type="submit" value="Upload Monero Wallets" id="upload-button" disabled>
           <small><small>Note: It will take a few minutes after uploading for the XMR wallet to work. The wallet needs to catch up with the network.</small></small>
           <br><br>
-        </form>
+        </form> -->
     {{else}}
       {{if .WalletPending}}
         <p style="color: yellow;">Wallet and wallet key successfully uploaded, wallet is currently catching up to the network. This can take anywhere from a few minutes to a half an hour to complete. Please be patient.</p>

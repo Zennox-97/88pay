@@ -233,12 +233,6 @@ function applyLink(description) {
 
 
   <br><br>
-<small><p> <b style="color: lightsteelblue;">Account {{.User.Username}} created on:</b> <span id="creation-date"></span></p></small>
-  <p> <b style="color: lightsteelblue;"> Total Earnings: </b> ${{.User.BillingData.AmountTotal}}</p>
-  <p>
-  <b style="color: lightsteelblue;"> Monthly Earnings: </b> ${{.User.BillingData.AmountThisMonth}} <b style="color: lightsteelblue;">  <small>(3% Fee: </b> <span id="threePercent"></span>) </small></p>
-
-
 
   <form method="GET" action="/cryptosettings">
     <button style="padding: 0 10px; margin-right: 10px; display: inline-block;">View/Change Crypto Settings</button>
@@ -250,23 +244,6 @@ function applyLink(description) {
 
 
 </form>
-
-  <h2>User Links</h2>
-  <div id="user-links-container">
-  </div>
-
-  <div style="display: flex; align-items: center; justify-content: center; margin-top: 10px;">
-    <input type="text" id="new-description" placeholder="New Description" style="width: 40%;">
-    <input type="text" id="new-url" placeholder="New URL" style="width: 40%;">
-    <button onclick="addLink()" style="cursor: pointer; width: 20%;">Add</button>
-  </div>
-
-  <form id="update-links-form" method="POST" action="/update-links">
-    <input type="hidden" id="links-input" name="links">
-    <input type="hidden" id="username-input" name="username" value="{{.User.Username}}">
-    <button type="submit">Update Links</button>
-  </form>
-
  <br>
  <br>
 
